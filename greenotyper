@@ -1,0 +1,163 @@
+#!/usr/bin/env python
+
+from greenotyperAPI import *
+#import GRAPEapi
+from optparse import OptionParser
+import os
+import sys
+from multiprocessing import Pool
+import time
+import traceback
+
+def _run_process(arg_call):
+    PipelineSettings, input_image, output_settings = arg_call
+
+    Pipeline = GREENOTYPER.Pipeline()
+    Pipeline.load_pipeline(PipelineSettings)
+
+    Pipeline.measure_size = output_settings[0]
+    Pipeline.measure_greenness = output_settings[1]
+    Pipeline.mask_output = output_settings[2]
+    Pipeline.crop_output = output_settings[3]
+    Pipeline.substructure = output_settings[4]
+
+    #sys.stderr.write("### STARTING PROCESS ###\n")
+
+    try:
+        Pipeline.open_image(input_image)
+        Pipeline.infer_network_on_image()
+        Pipeline.identify_group()
+        Pipeline.color_correction()
+
+        Pipeline.read_camera_map("camera_map.csv")
+        Pipeline.read_name_map("round1.csv")
+        Pipeline.crop_and_label_pots()
+    except Exception as e:
+        sys.stderr.write("### PROCESS FAILED! ###\n")
+        traceback.print_exc()
+
+if __name__=="__main__":
+    Pipeline = GREENOTYPER.Pipeline()
+    usage = '''
+\033[32m=========== GREENOTYPER (v{}) ===========\033[39m
+\033[4m%prog\033[24m \033[38;5;202m-i image/directory -p settings.pipeline\033[39m \033[38;5;74m[options]\033[39m'''.format(Pipeline.__version__)
+    parser = OptionParser(usage)
+
+    parser.add_option('-i', '--in', type="string", nargs=1, dest="image",
+                      help="Input image or directory of images for inference (required)")
+    parser.add_option('-n', '--network', type="string", nargs=1, dest="network",
+                      help="Input neural network directory (required, if not provided with pipeline file).")
+    parser.add_option('-p', '--pipeline', type="string", nargs=1, dest="pipeline",
+                      help="Pipeline file containing all settings")
+    #parser.add_option('-d', '--draw' type="string", nargs=1, dest="example",
+    #                  help="Whether an example image should be produced. Requires a filename.")
+    parser.add_option('-t', '--threads', type="int", nargs=1, dest="threads", default=1,
+                      help="Number of threads available. Only used to run on multiple images at a time. Default: 1. Settings less than 0 use all available cores.")
+    parser.add_option('-s', '--size_output', type="string", nargs=1, dest="SizeDirectory",
+                      help="Output directory for the size measurements. Default is no output.")
+    parser.add_option('-g', '--greenness_output', type="string", nargs=1, dest="GreennessDirectory",
+                      help="Output directory for the greenness measurements. Default is no output.")
+    parser.add_option('-m', '--mask_output', type="string", nargs=1, dest="MaskDirectory",
+                      help="Output directory for the produced masks. Default is no output.")
+    parser.add_option('-c', '--crop_output', type="string", nargs=1, dest="CropDirectory",
+                      help="Output directory for the cropped images. Default is no output.")
+    parser.add_option('--by_day', action="store_true", dest="by_day",
+                      help="Subdividing the outputs based on per day. Recommended to avoid file system overflow.")
+    parser.add_option('--by_individual', action="store_true", dest="by_sample",
+                      help="Subdividing the outputs based on per day. Recommended to avoid file system overflow.")
+    parser.add_option('--GUI', action="store_true", dest="gui",
+                      help="Open up the GRAPE GUI.")
+    parser.add_option('-o', '--organize', type="string", nargs=2, dest="OrganizeOutput",
+                      help="Organize and clean the output. Usage: --organize=input_file output_file. \n If included only this action will be performed.")
+
+    options, args = parser.parse_args()
+
+    input_image = options.image
+    network_dir = options.network
+    pipeline = options.pipeline
+    #example_image = options.example
+    threads = options.threads
+    maskdir = options.MaskDirectory
+    cropdir = options.CropDirectory
+    sizedir = options.SizeDirectory
+    greennessdir = options.GreennessDirectory
+
+    if options.gui:
+        from greenotyperAPI.GUI.PipelineRunner import *
+        app = QApplication([])
+        app.setApplicationName("GREENOTYPER")
+        scriptDir = os.path.dirname(os.path.realpath(__file__))
+        app.setWindowIcon(QtGui.QIcon(scriptDir + os.path.sep + 'icon/icon.png'))
+        mainwindow = PipelineRunner()
+        mainwindow.windowicon = QtGui.QIcon(scriptDir + os.path.sep + 'icon/icon.png')
+        mainwindow.show()
+        sys.exit(app.exec_())
+
+    PipelineSettings = GREENOTYPER.pipeline_settings()
+    #Pipeline = GRAPE.Pipeline()
+
+    if pipeline is None:
+        Warning("No pipeline settings provided. Will use default settings")
+    else:
+        PipelineSettings.read(pipeline)
+
+    Pipeline.load_pipeline(PipelineSettings)
+
+    if options.OrganizeOutput:
+        #if threads==1:
+        filename, output_file = options.OrganizeOutput
+        Pipeline.organize_output(filename, output_file)
+        sys.exit()
+        #else:
+        #    directory, output_file = options.JoinOutput
+        #    Pipeline.multi_join_output(directory, output_file, threads)
+        #    sys.exit()
+
+    if (not hasattr(Pipeline, "detection_graph")) and (not hasattr(Pipeline, "label_map")):
+        if network_dir is None:
+            raise GRAPE.ArgumentError("No network directory provided or available in pipeline settings. Use -n directory, or -h to see the help message\n Consider adding the network to a pipeline file using the PipelinePlanner")
+        else:
+            if os.path.isdir(network_dir):
+                files = os.listdir(network_dir)
+                graph = os.path.join(network_dir,filter(lambda x: ".pb" in x and "txt" not in x, files)[0])
+                label = os.path.join(network_dir,filter(lambda x: ".pbtxt" in x, files)[0])
+
+    if input_image is None:
+        raise GREENOTYPER.ArgumentError("No input image provided. Use -i filename, or -h to see the help message")
+
+    if os.path.isdir(input_image):
+        input_images = Pipeline.scan_directory(input_image)
+    else:
+        input_images = [input_image]
+
+    output_settings = []
+    if sizedir is None: output_settings.append((False, ""))
+    else: output_settings.append((True, sizedir))
+    if greennessdir is None: output_settings.append((False, ""))
+    else: output_settings.append((True, greennessdir))
+    if maskdir is None: output_settings.append((False, ""))
+    else: output_settings.append((True, maskdir))
+    if cropdir is None: output_settings.append((False, ""))
+    else: output_settings.append((True, cropdir))
+    if options.by_day: output_settings.append((True, "Time"))
+    elif options.by_sample: output_settings.append((True, "Sample"))
+    else: output_settings.append((False, ""))
+
+    arg_calls = []
+    for input_image in input_images:
+        arg_calls.append((PipelineSettings, input_image, output_settings))
+
+    pool = Pool(processes=threads)
+
+    rs = pool.map_async(_run_process, arg_calls)
+    pool.close()
+    while True:
+        if rs.ready(): break
+        remaining = rs._number_left
+        print("Images left to process {}".format(remaining))
+        time.sleep(5)
+
+    #for i, _ in enumerate(pool.map(_run_process, arg_calls)):
+    #    sys.stderr.write("\rdone {0:%}".format(i/len(input_images)))
+    #pool.terminate()
+    #pool.join()

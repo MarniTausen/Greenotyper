@@ -1,0 +1,15 @@
+item {
+  name: "QRCODE"
+  id: 2
+  display_name: "QRCODE"
+}
+item {
+  name: "QRCOLOR"
+  id: 3
+  display_name: "QRCOLOR"
+}
+item {
+  name: "POT"
+  id: 1
+  display_name: "POT"
+}
