@@ -97,7 +97,7 @@ class pipeline_settings:
 class Pipeline:
 
     def __get_version__(self):
-        self.__version__ = "0.5.6"
+        self.__version__ = "0.5.7"
         return self.__version__
 
     ## Initialization codes and file reading

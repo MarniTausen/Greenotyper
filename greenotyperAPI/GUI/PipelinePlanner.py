@@ -6,7 +6,7 @@ from PyQt5.QtWidgets import (QApplication, QLabel, QDialog, QMainWindow,
                              QFileDialog, QSlider, QMessageBox, QVBoxLayout,
                              QGroupBox, QCheckBox, QSpinBox, QRadioButton,
                              QLineEdit, QSizePolicy, QAction, QStatusBar,
-                             QMenuBar)
+                             QMenuBar, QTabWidget)
 import PyQt5.QtGui as QtGui
 from PyQt5.QtCore import (pyqtSlot, Qt, QTimer, QObject, QRunnable,
                           QThreadPool, pyqtSignal)
@@ -118,6 +118,7 @@ class GUI(QWidget):
         self.make_right_bar()
 
         self.init_placement_control_panel()
+        self.init_network_control_panel()
         self.init_identification_panel()
 
         self.make_left_bar()
@@ -303,7 +304,8 @@ class GUI(QWidget):
     def init_placement_control_panel(self):
         #self.placement_label = QLabel()
         #self.placement_label.setText("Placement setup")
-        self.placement_group = QGroupBox("Placement setup")
+        self.placement_group = QWidget()
+
 
         self.column_label = QLabel()
         self.column_label.setText("Number of Columns")
@@ -372,22 +374,6 @@ class GUI(QWidget):
         self.time_inputs.addWidget(self.time_stamp_input)
         self.time_inputs.addWidget(self.time_stamp_output)
 
-        self.placement_layout = QVBoxLayout()
-        #self.placement_layout.addWidget(self.placement_label)
-        self.placement_layout.addLayout(self.labels)
-        self.placement_layout.addLayout(self.spinboxes)
-
-        self.placement_layout.addWidget(self.filename_pattern_text)
-        self.placement_layout.addWidget(self.filename_pattern)
-        self.placement_layout.addLayout(self.time_labels)
-        self.placement_layout.addLayout(self.time_inputs)
-
-        self.placement_group.setLayout(self.placement_layout)
-
-    def init_identification_panel(self):
-        self.identification_label = QLabel()
-        self.identification_label.setText("Identification setup")
-
         bg_color = "#ffffff"
         margin = "2.5px"
         br_color = "#000000"
@@ -421,6 +407,35 @@ class GUI(QWidget):
         self.idmap_group = QHBoxLayout()
         self.idmap_group.addWidget(self.idmap_button)
         self.idmap_group.addWidget(self.idmap_label)
+
+
+        self.placement_layout = QVBoxLayout()
+        #self.placement_layout.addWidget(self.placement_label)
+        self.placement_layout.addLayout(self.labels)
+        self.placement_layout.addLayout(self.spinboxes)
+
+        self.placement_layout.addWidget(self.filename_pattern_text)
+        self.placement_layout.addWidget(self.filename_pattern)
+        self.placement_layout.addLayout(self.time_labels)
+        self.placement_layout.addLayout(self.time_inputs)
+        self.placement_layout.addLayout(self.cammap_group)
+        self.placement_layout.addLayout(self.idmap_group)
+
+        self.placement_group.setLayout(self.placement_layout)
+    def init_network_control_panel(self):
+        self.network_control_panel = QWidget()
+
+    def init_identification_panel(self):
+        self.identification_label = QLabel()
+        self.identification_label.setText("Identification setup")
+
+        bg_color = "#ffffff"
+        margin = "2.5px"
+        br_color = "#000000"
+        br_width = "1px"
+        css_style = "padding:{};".format(margin)
+        css_style += "background-color:{};".format(bg_color)
+        css_style += "border: {} solid {};".format(br_width, br_color)
 
         self.crop_and_label_pots = QPushButton("Test crop and label pots")
         self.crop_and_label_pots.clicked.connect(self.TestCrop)
@@ -466,22 +481,11 @@ class GUI(QWidget):
     def make_left_bar(self):
         self.leftbar = QVBoxLayout()
 
-        self.leftbar.addWidget(self.placement_group)
+        self.left_tabs = QTabWidget()
+        self.left_tabs.addTab(self.placement_group, "Placement setup")
+        self.left_tabs.addTab(self.network_control_panel, "Network settings")
 
-        #self.leftbar.addWidget(self.placement_label)
-        #self.leftbar.addLayout(self.labels)
-        #self.leftbar.addLayout(self.spinboxes)
-        #self.leftbar.addWidget(self.figcanvas)
-
-        #self.leftbar.addWidget(self.filename_pattern_text)
-        #self.leftbar.addWidget(self.filename_pattern)
-        #self.leftbar.addLayout(self.filename_pattern_group)
-        #self.leftbar.addLayout(self.time_labels)
-        #self.leftbar.addLayout(self.time_inputs)
-
-        #self.leftbar.addWidget(self.identification_label)
-        self.leftbar.addLayout(self.cammap_group)
-        self.leftbar.addLayout(self.idmap_group)
+        self.leftbar.addWidget(self.left_tabs)
         self.leftbar.addWidget(self.crop_and_label_pots)
         self.leftbar.addLayout(self.dimensions)
         self.leftbar.addWidget(self.croplabel)
