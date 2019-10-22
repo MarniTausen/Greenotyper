@@ -97,7 +97,7 @@ class pipeline_settings:
 class Pipeline:
 
     def __get_version__(self):
-        self.__version__ = "0.5.5"
+        self.__version__ = "0.5.6"
         return self.__version__
 
     ## Initialization codes and file reading
@@ -169,7 +169,7 @@ class Pipeline:
     def read_pbtxt(self, label_file):
         '''
         Read pbtxt file from <label_file>
-        Saves pbtxt file as self.label_map.
+        Saves pbtxt file as self.label_map
         '''
         items = open(label_file).read().split("item")
         self.label_map = {}
@@ -187,24 +187,39 @@ class Pipeline:
             if cid == None: continue
             self.label_map[int(cid)] = name
     def open_image(self, image_filename):
+        '''
+        Open an image using PILLOW
+        Image available as self.image
+        Supports: jpg and png
+        If png is loaded the fourth channel for alpha values is dropped.
+        '''
         self._image_filename = image_filename
 
-        #self.image = io.imread(image_filename)
         self.image = np.array(Image.open(image_filename))
-
         if 4==self.image.shape[2]:
             self.image = np.array(self.image[:, :, :3])
 
+        self._reset_inferred_boxes()
+
+        self.height, self.width, _ = self.image.shape
+    def _reset_inferred_boxes(self):
+        '''
+        Clears any inferred boxes
+        '''
         keys = self.boxes.keys()
         self.boxes = {}
         for key in keys:
             self.boxes[key] = list()
-
-        self.height, self.width, _ = self.image.shape
     def save_image(self, image_filename):
-        #io.imsave(image_filename, self.image)
+        '''
+        Save self.image as <image_filename>.jpeg
+        '''
         Image.fromarray(self.image).save(image_filename, "JPEG")
     def infer_network_on_image(self):
+        '''
+        Applies the loaded graph on loaded image.
+        The inferred bounding boxes in self.boxes
+        '''
         with self.detection_graph.as_default():
             with tf.Session(graph=self.detection_graph) as sess:
                 image_tensor = self.detection_graph.get_tensor_by_name('image_tensor:0')
@@ -671,10 +686,15 @@ class Pipeline:
             self.mean = mean
             self.var = var
             self.n = n
+            self.items = {"mean": self.mean,
+                          "var": self.var,
+                          "n": self.n}
         def __str__(self):
             return "mean: {}, var: {}, n: {}".format(self.mean, self.var, self.n)
         def __rep__(self):
             return self.__str__()
+        def __getitem__(self, key):
+            return self.items[key]
 
     ## COLOR CORRECTION
     def color_correction(self):
@@ -688,11 +708,11 @@ class Pipeline:
             color_correct_base = self.image[top:bottom,left:right]
 
             self.image[..., 0] = self._imadjust(self.image[..., 0],
-                                                self._get_mean_min_max(color_correct_base[..., 0]))
+                                                self._get_mean_max(color_correct_base[..., 0]))
             self.image[..., 1] = self._imadjust(self.image[..., 1],
-                                                self._get_mean_min_max(color_correct_base[..., 1]))
+                                                self._get_mean_max(color_correct_base[..., 1]))
             self.image[..., 2] = self._imadjust(self.image[..., 2],
-                                                self._get_mean_min_max(color_correct_base[..., 2]))
+                                                self._get_mean_max(color_correct_base[..., 2]))
     def _imadjust(self, channel, vin, vout=(0,255)):
         #assert len(channel) == 2, 'Channel must be 2-dimenisonal'
 
@@ -897,12 +917,12 @@ class Pipeline:
         if return_crop_list:
             crop_list = []
             sample_list = []
+        else:
+            growth_file = self.filelocking_csv_writer(os.path.join(self.measure_size[1],"database.size.csv"))
+            greenness_file = self.filelocking_csv_writer(os.path.join(self.measure_greenness[1],"database.greenness.csv"))
 
-        growth_file = self.filelocking_csv_writer(os.path.join(self.measure_size[1],"database.size.csv"))
-        greenness_file = self.filelocking_csv_writer(os.path.join(self.measure_greenness[1],"database.greenness.csv"))
-
-        growth_rows = []
-        greenness_rows = []
+            growth_rows = []
+            greenness_rows = []
 
         for pot, label in zip(pots, labels):
             name = self.name_map[label[0]][label[1]]
@@ -953,7 +973,7 @@ class Pipeline:
                     growth_rows.append([name, timestamp, size])
 
                 if self.measure_greenness[0]:
-                    if mini_mask_0.sum()>1000:
+                    if mini_mask_0.sum()>(self.dim*self.dim)*0.05:
                         mean_degree, var_degree, n, plot_image = self.__circular_hsv(mini_img, mini_mask_0, plot=False)
 
                         greenness_rows.append([name, timestamp, str(mean_degree), str(var_degree), str(n)])
@@ -1194,55 +1214,31 @@ class Pipeline:
             times.add(time)
         times = sorted(list(times))
         samples = base_stats.keys()
-        print(times)
-        print(samples)
-
-        start_points = {}
-
-        # Find start value:
-        for sample in samples:
-            for i, time in enumerate(times):
-                stats = base_stats[sample][time]
-                if stats.n<5000:
-                    continue
-                start_points[sample] = {}
-                start_points[sample]['i'] = i
-                start_points[sample]['stats'] = stats
-                break
-
-        print(start_points)
-
-        p_values = {}
-        t_values = {}
-        df_values = {}
-
         #print(times)
+        #print(samples)
 
-        for sample in samples:
-            i = start_points[sample]['i']
-            start_stat = start_points[sample]['stats']
-            if sample not in p_values:
-                p_values[sample] = {}
-                t_values[sample] = {}
-                df_values[sample] = {}
-            for j, time in enumerate(times):
-                if j<i:
-                    pass
+        outfile_files = {'mean': self.csv_writer(output_file+".mean.csv"),
+                         'var': self.csv_writer(output_file+".var.csv"),
+                         'n': self.csv_writer(output_file+".n.csv")}
+        for name in outfile_files:
+             outfile_files[name].init_header(["Time"]+samples)
+             outfile_files[name].write_header()
+
+        out_names = ['mean', 'var', 'n']
+
+        for time in times:
+            row = {'mean': [time],
+                    'var': [time],
+                    'n': [time]}
+            for sample in samples:
+                if time in base_stats[sample]:
+                    for name in out_names:
+                        row[name].append(str(base_stats[sample][time][name]))
                 else:
-                    stats = base_stats[sample][time]
-                    t, df, pval = self.welch_ttest(start_stat, stats)
-                    print(j, t, df, pval)
-                    print(stats)
-                    print(start_stat)
-                    p_values[sample][time] = pval
-                    t_values[sample][time] = t
-                    df_values[sample][time] = df
+                    for name in out_names:
+                        row[name].append('NA')
+            for name in out_names:
+                outfile_files[name].write_row(row[name])
 
-        print(p_values)
-
-        ## Choose start point. DONE
-        ### Find first day with no NaNs DONE
-        ## Test from start day to all other days
-        ## Make files with t statistics and p values
-        ## Make file with first day of significance.
-        ## Figure out how to avoid random noisy points.
+        for name in out_names:
+            outfile_files[name].close()
