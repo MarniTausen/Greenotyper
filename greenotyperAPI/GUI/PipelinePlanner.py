@@ -390,7 +390,7 @@ class GUI(QWidget):
         self.cammap_label = QLabel()
         self.cammap_label.setText("No file chosen")
         self.cammap_label.setStyleSheet(css_style)
-        self.cammap_label.setMaximumWidth(200)
+        self.cammap_label.setMaximumWidth(140)
         self.cammap_group = QHBoxLayout()
         self.cammap_group.addWidget(self.cammap_button)
         self.cammap_group.addWidget(self.cammap_label)
@@ -403,7 +403,7 @@ class GUI(QWidget):
         self.idmap_label = QLabel()
         self.idmap_label.setText("No file chosen")
         self.idmap_label.setStyleSheet(css_style)
-        self.idmap_label.setMaximumWidth(200)
+        self.idmap_label.setMaximumWidth(140)
         self.idmap_group = QHBoxLayout()
         self.idmap_group.addWidget(self.idmap_button)
         self.idmap_group.addWidget(self.idmap_label)
@@ -425,6 +425,45 @@ class GUI(QWidget):
     def init_network_control_panel(self):
         self.network_control_panel = QWidget()
 
+        self.plant_class_label = QLabel("Plant Class")
+        self.plant_class_text = QLineEdit()
+        self.plant_class_text.setSizePolicy(QSizePolicy.Fixed,
+                                            QSizePolicy.Fixed)
+        self.plant_class_text.setMaximumSize(120,30)
+
+        self.group_identifier = QLabel("Group identifier")
+        self.group_identifier_text = QLineEdit()
+        self.group_identifier_text.setSizePolicy(QSizePolicy.Fixed,
+                                                 QSizePolicy.Fixed)
+        self.group_identifier_text.setMaximumSize(120,20)
+
+        self.color_reference = QLabel("Color reference")
+        self.color_reference_text = QLineEdit()
+        self.color_reference_text.setSizePolicy(QSizePolicy.Fixed,
+                                                QSizePolicy.Fixed)
+        self.color_reference_text.setMaximumSize(160,20)
+
+        self.class_labels = QHBoxLayout()
+        self.class_labels.addWidget(self.plant_class_label)
+        self.class_labels.addWidget(self.group_identifier)
+
+        self.class_text_boxes = QHBoxLayout()
+        self.class_text_boxes.addWidget(self.plant_class_text)
+        self.class_text_boxes.addWidget(self.group_identifier_text)
+
+        self.color_reference_layout = QHBoxLayout()
+        self.color_reference_layout.addWidget(self.color_reference)
+        self.color_reference_layout.addWidget(self.color_reference_text)
+
+        self.network_control_layout = QVBoxLayout()
+        self.network_control_layout.addLayout(self.class_labels)
+        self.network_control_layout.addLayout(self.class_text_boxes)
+        self.network_control_layout.addLayout(self.color_reference_layout)
+
+        self.network_control_layout.addStretch(1)
+
+        self.network_control_panel.setLayout(self.network_control_layout)
+
     def init_identification_panel(self):
         self.identification_label = QLabel()
         self.identification_label.setText("Identification setup")
@@ -442,7 +481,7 @@ class GUI(QWidget):
 
 
         self.dimension_text = QLabel()
-        self.dimension_text.setText("Dimension size")
+        self.dimension_text.setText("Dimension size x2")
 
         self.dimension_size = QLineEdit()
         #elf.dimension_size.setText("200")
@@ -484,6 +523,8 @@ class GUI(QWidget):
         self.left_tabs = QTabWidget()
         self.left_tabs.addTab(self.placement_group, "Placement setup")
         self.left_tabs.addTab(self.network_control_panel, "Network settings")
+        self.left_tabs.setSizePolicy(QSizePolicy.Fixed,
+                                     QSizePolicy.Fixed)
 
         self.leftbar.addWidget(self.left_tabs)
         self.leftbar.addWidget(self.crop_and_label_pots)
@@ -539,6 +580,10 @@ class GUI(QWidget):
             self.find_plants.setDisabled(False)
 
         self.color_correct_check.setChecked(self.PS.identification_settings['ColorCorrect'])
+
+        self.plant_class_text.setText(self.PS.placement_settings['PlantLabel'])
+        self.group_identifier_text.setText(self.PS.placement_settings['GroupIdentifier'])
+        self.color_reference_text.setText(self.PS.identification_settings['ColorReference'])
 
     def reload_image(self):
         if hasattr(self.PL, "image"):
@@ -617,6 +662,7 @@ class GUI(QWidget):
         self.PS.mask_settings['LAB']['enabled'] = self.lab_label.isChecked()
 
         self.PS.identification_settings['ColorCorrect'] = self.color_correct_check.isChecked()
+        self.PS.identification_settings['ColorReference'] = self.color_reference_text.text()
 
         self.PS.placement_settings['rows'] = self.rows.value()
         self.PS.placement_settings['columns'] = self.columns.value()
@@ -626,6 +672,9 @@ class GUI(QWidget):
         self.PS.identification_settings['TimestampOutput'] = self.time_stamp_output.text()
 
         self.PS.identification_settings['FilenamePattern'] = self.filename_pattern.text()
+
+        self.PS.placement_settings['PlantLabel'] = self.plant_class_text.text()
+        self.PS.placement_settings['GroupIdentifier'] = self.group_identifier_text.text()
 
     def _mask_process(self, progress_callback):
         self.process_text.setText("producing mask (Apply Mask)")
@@ -691,11 +740,7 @@ class GUI(QWidget):
         self.PL.infer_network_on_image()
         if self.pot_filteration.isChecked():
             self.process_text.setText("running pot filteration (Find Plants)")
-            try:
-                self.PL.identify_group()
-            except Exception as inst:
-                QMessageBox.about(self, "Error in Filteration", inst.message)
-                traceback.print_exc()
+            self.PL.identify_group()
         if self.color_correct_check.isChecked():
             self.process_text.setText("applying color correction (Find Plants)")
             self.PL.color_correction()
@@ -706,6 +751,14 @@ class GUI(QWidget):
         self.process_text.setText("process complete! (Find Plants)")
         self.detected = True
         self.network_is_running = False
+    def _network_error(self, error):
+        exctype, value, errormsg = error
+        print(exctype)
+        print(value)
+        print(errormsg)
+        QMessageBox.about(self, "Error in Filteration", str(value))
+        self.network_is_running = False
+        self.process_text.setText("Process failed!(Find Plants)")
     @pyqtSlot()
     def FindPlants(self):
         if hasattr(self.PL, "image"):
@@ -715,6 +768,7 @@ class GUI(QWidget):
                 return None
             self.network_is_running = True
             worker = greenotyperAPI.GUI.PipelineRunner.Worker(self._network_process)
+            worker.signals.error.connect(self._network_error)
             self.threadpool.start(worker)
         else:
             QMessageBox.question(self, '', "No image is loaded",

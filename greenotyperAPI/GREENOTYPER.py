@@ -97,7 +97,7 @@ class pipeline_settings:
 class Pipeline:
 
     def __get_version__(self):
-        self.__version__ = "0.5.7"
+        self.__version__ = "0.5.8"
         return self.__version__
 
     ## Initialization codes and file reading
@@ -242,9 +242,9 @@ class Pipeline:
     ## Pot identification and filteration functions
     def identify_group(self, row_threshold=300):
         if self.PlantLabel not in self.boxes:
-            raise Exception("No plants to filter")
+            raise Exception("No plants to filter (No detected class of value {})".format(self.PlantLabel))
         if self.GroupIdentifier not in self.boxes:
-            raise Exception("Missing identifying object")
+            raise Exception("Missing group identifier (No detected class of {})".format(self.GroupIdentifier))
 
         Pots = self.boxes[self.PlantLabel]
         rows = self._divide_into_rows(Pots, row_threshold)
@@ -700,7 +700,7 @@ class Pipeline:
     def color_correction(self):
         if self.ColorCorrect:
             if self.ColorReference not in self.boxes:
-                raise Exception("Missing identifying object")
+                raise Exception("Missing color reference class (No detected object of class {})".format(self.ColorReference))
             identify_codes = self.boxes.get(self.ColorReference, [])
 
             left, right, top, bottom = identify_codes[0]
@@ -992,12 +992,15 @@ class Pipeline:
                     #io.imsave(os.path.join(self.crop_output[1],output_name+".jpg"),
                     #          self.image[top:bottom, left:right])
 
-        growth_file.write_rows(growth_rows)
-        growth_file.close()
-        greenness_file.write_rows(greenness_rows)
-        greenness_file.close()
+
         if return_crop_list:
             return crop_list, sample_list
+        else:
+            growth_file.write_rows(growth_rows)
+            growth_file.close()
+            greenness_file.write_rows(greenness_rows)
+            greenness_file.close()
+
     class filelocking_csv_writer:
         def __init__(self, filename, sep=","):
             self._file = open(filename, "a", buffering=1)
