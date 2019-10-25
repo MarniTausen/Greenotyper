@@ -455,10 +455,18 @@ class GUI(QWidget):
         self.color_reference_layout.addWidget(self.color_reference)
         self.color_reference_layout.addWidget(self.color_reference_text)
 
+        self.white_balancing = QRadioButton("White balancing")
+        self.black_balancing = QRadioButton("Black balancing")
+        self.full_colorcorrect = QRadioButton("Full color correction")
+        self.full_colorcorrect.setChecked(True)
+
         self.network_control_layout = QVBoxLayout()
         self.network_control_layout.addLayout(self.class_labels)
         self.network_control_layout.addLayout(self.class_text_boxes)
         self.network_control_layout.addLayout(self.color_reference_layout)
+        self.network_control_layout.addWidget(self.white_balancing)
+        self.network_control_layout.addWidget(self.black_balancing)
+        self.network_control_layout.addWidget(self.full_colorcorrect)
 
         self.network_control_layout.addStretch(1)
 
@@ -581,6 +589,11 @@ class GUI(QWidget):
 
         self.color_correct_check.setChecked(self.PS.identification_settings['ColorCorrect'])
 
+        cctype = self.PS.identification_settings['ColorCorrectType']
+        if cctype=="maximum": self.white_balancing.setChecked(True)
+        if cctype=="minimum": self.black_balancing.setChecked(True)
+        if cctype=="both": self.full_colorcorrect.setChecked(True)
+
         self.plant_class_text.setText(self.PS.placement_settings['PlantLabel'])
         self.group_identifier_text.setText(self.PS.placement_settings['GroupIdentifier'])
         self.color_reference_text.setText(self.PS.identification_settings['ColorReference'])
@@ -639,9 +652,12 @@ class GUI(QWidget):
         fileName, _ = QFileDialog.getOpenFileName(self,"QFileDialog.getOpenFileName()", "",
                                                   "Pipeline file (*.pipeline);;All Files (*)")
         if fileName:
-            self.PS.read(fileName)
-            #self.PL.load_pipeline(self.PS)
-            self.setDefaultValues()
+            try:
+                self.PS.read(fileName)
+                #self.PL.load_pipeline(self.PS)
+                self.setDefaultValues()
+            except:
+                QMessageBox.about(self, "openPipeline", "Error in the format of {}".format(fileName))
     @pyqtSlot()
     def exportPipeline(self):
         fileName, _ = QFileDialog.getSaveFileName(self,"QFileDialog.getOpenFileName()", "",
@@ -663,6 +679,13 @@ class GUI(QWidget):
 
         self.PS.identification_settings['ColorCorrect'] = self.color_correct_check.isChecked()
         self.PS.identification_settings['ColorReference'] = self.color_reference_text.text()
+        if self.white_balancing.isChecked():
+            self.PS.identification_settings['ColorCorrectType'] = "maximum"
+        if self.black_balancing.isChecked():
+            self.PS.identification_settings['ColorCorrectType'] = "minimum"
+        if self.full_colorcorrect.isChecked():
+            self.PS.identification_settings['ColorCorrectType'] = "both"
+
 
         self.PS.placement_settings['rows'] = self.rows.value()
         self.PS.placement_settings['columns'] = self.columns.value()

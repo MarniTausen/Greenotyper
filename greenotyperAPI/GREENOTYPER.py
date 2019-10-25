@@ -22,15 +22,6 @@ Image.MAX_IMAGE_PIXELS = None
 class ArgumentError(Exception):
     pass
 
-def _reading_process(arg_calls):
-    filename, self = arg_calls
-    Time, Measure = self._read_csv_data_file(filename)
-    return Time, Measure
-
-#def _directory_construction_process(arg_calls):
-#    Time, Measure, self = arg_calls
-#    self._put_data_in(Time, Measure)
-
 class pipeline_settings:
 
     def __init__(self):
@@ -67,6 +58,7 @@ class pipeline_settings:
         self.identification_settings = {}
         self.identification_settings['ColorReference'] = 'QRCODE'
         self.identification_settings['ColorCorrect'] = True
+        self.identification_settings['ColorCorrectType'] = "maximum"
         self.identification_settings['dimension'] = 250
         self.identification_settings['Cameramap'] = None
         self.identification_settings['Namemap'] = None
@@ -97,7 +89,7 @@ class pipeline_settings:
 class Pipeline:
 
     def __get_version__(self):
-        self.__version__ = "0.5.8"
+        self.__version__ = "0.5.9"
         return self.__version__
 
     ## Initialization codes and file reading
@@ -129,6 +121,7 @@ class Pipeline:
         self.GroupIdentifier = pipeline.placement_settings['GroupIdentifier']
         self.ColorReference = pipeline.identification_settings['ColorReference']
         self.ColorCorrect = pipeline.identification_settings['ColorCorrect']
+        self.ColorCorrectType = pipeline.identification_settings['ColorCorrectType']
         self.dim = pipeline.identification_settings['dimension']
         self.timestamp_format = pipeline.identification_settings['TimestampFormat']
         self.timestamp_output = pipeline.identification_settings['TimestampOutput']
@@ -707,30 +700,37 @@ class Pipeline:
 
             color_correct_base = self.image[top:bottom,left:right]
 
-            self.image[..., 0] = self._imadjust(self.image[..., 0],
-                                                self._get_mean_max(color_correct_base[..., 0]))
-            self.image[..., 1] = self._imadjust(self.image[..., 1],
-                                                self._get_mean_max(color_correct_base[..., 1]))
-            self.image[..., 2] = self._imadjust(self.image[..., 2],
-                                                self._get_mean_max(color_correct_base[..., 2]))
+            if self.ColorCorrectType=="maximum":
+                self.image[..., 0] = self._imadjust(self.image[..., 0],
+                                                    self._get_mean_max(color_correct_base[..., 0]))
+                self.image[..., 1] = self._imadjust(self.image[..., 1],
+                                                    self._get_mean_max(color_correct_base[..., 1]))
+                self.image[..., 2] = self._imadjust(self.image[..., 2],
+                                                    self._get_mean_max(color_correct_base[..., 2]))
+            if self.ColorCorrectType=="minimum":
+                self.image[..., 0] = self._imadjust(self.image[..., 0],
+                                                    self._get_mean_max(color_correct_base[..., 0]))
+                self.image[..., 1] = self._imadjust(self.image[..., 1],
+                                                    self._get_mean_max(color_correct_base[..., 1]))
+                self.image[..., 2] = self._imadjust(self.image[..., 2],
+                                                    self._get_mean_max(color_correct_base[..., 2]))
+            if self.ColorCorrectType=="both":
+                self.image[..., 0] = self._imadjust(self.image[..., 0],
+                                                    self._get_mean_max(color_correct_base[..., 0]))
+                self.image[..., 1] = self._imadjust(self.image[..., 1],
+                                                    self._get_mean_max(color_correct_base[..., 1]))
+                self.image[..., 2] = self._imadjust(self.image[..., 2],
+                                                    self._get_mean_max(color_correct_base[..., 2]))
     def _imadjust(self, channel, vin, vout=(0,255)):
         #assert len(channel) == 2, 'Channel must be 2-dimenisonal'
 
-        scale = (vout[1] - vout[0]) / (vin[1] - vin[0])
+        scale = (vout[1] - vout[0]) / float(vin[1] - vin[0])
         vs = channel-vin[0]
-        vs[channel<vin[0]] = 0
-        vd = vs*scale+0.5+vout[0]
+        vs[vs<vin[0]] = 0
+        vd = vs*scale+vout[0]
         vd[vd>vout[1]] = vout[1]
 
-        return vd
-    def _averages(self, channel, t=15):
-        minI = img.min()
-        maxI = img.max()
-        low_values = img<=minI+t
-        high_values = img>=maxI-t
-        low_average = np.median(img[low_values])
-        high_average = np.median(img[high_values])
-        return low_average, high_average
+        return vd.astype(int)
     def _get_mean_min_max(self, channel, t=15):
         minv = np.median(channel[channel<=(channel.min()+t)])
         maxv = np.median(channel[channel>=(channel.max()-t)])
@@ -1204,7 +1204,7 @@ class Pipeline:
             outfile.write_row(row)
             del unsorted_output[time_point]
 
-    def greenness_tests(self, filename, output_file):
+    def greenness_output(self, filename, output_file):
         datafile = self.simple_csv_reader(filename)
         base_stats = {}
         times = set()
