@@ -800,6 +800,8 @@ class GUI(QWidget):
     def ColorCorrect(self):
         if hasattr(self.PL, "image"):
             if self.detected:
+                self.UpdatePipelineSettings()
+                self.PL.load_pipeline(self.PS)
                 self.PL.color_correction()
                 self.__onload_image(self.PL.image)
             else:
@@ -889,7 +891,7 @@ class GUI(QWidget):
 
 if __name__=="__main__":
 
-    PF = PlantFinder()
+    PF = GREENOTYPER.Pipeline()
 
     app = QApplication([])
     app.setApplicationName("GREENOTYPER (v{})".format(PF.__version__))

@@ -389,13 +389,13 @@ class PipelineRunner(QWidget):
         textbox_width = 170
 
         self.environment_textbox = QTextEdit()
-        self.environment_default = "Environment loading - Example using conda: conda activate GRAPEenv"
+        self.environment_default = "Environment loading - Example using conda: conda activate greenotyperenv"
         self.environment_textbox.setText(self.environment_default)
         self.environment_textbox.setMaximumHeight(textbox_height)
         self.environment_textbox.setMaximumWidth(textbox_width)
 
         self.cluster_submit = QTextEdit()
-        self.cluster_default = 'Cluster submit command, replaces {command} with the GRAPE command, example srun "{command}"'
+        self.cluster_default = 'Cluster submit command, replaces {command} with the greenotyper command, example srun "{command}"'
         self.cluster_submit.setText(self.cluster_default)
         self.cluster_submit.setMaximumHeight(textbox_height)
         self.cluster_submit.setMaximumWidth(textbox_width)
