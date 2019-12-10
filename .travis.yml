@@ -21,8 +21,10 @@ install:
   - conda info -a
 
   # Create environment
-  - conda create -q -n test-environment python=$TRAVIS_PYTHON_VERSION numpy scikit-image tensorflow pyqt
+  - conda create -q -n test-environment python=$TRAVIS_PYTHON_VERSION numpy scikit-image tensorflow pyqt pytest codecov
   - conda activate test-environment
   - python setup.py install
 script:
-    - python test.py
+    - pytest
+after succuess:
+    - codecov
