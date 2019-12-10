@@ -1,4 +1,5 @@
 Greenotyper
+[![Build Status](https://api.travis-ci.com/MarniTausen/Greenotyper.svg?branch=master)](https://travis-ci.com/MarniTausen/Greenotyper)
 ================
 Marni Tausen
 10/12/2019 - 13:44:25
@@ -9,8 +10,6 @@ Marni Tausen
 -   [Command line interface guide](#command-line-interface-guide)
 -   [Pipeline setup guide](#pipeline-setup-guide)
 -   [Neural net training](#neural-net-training)
-
-[![Build Status](https://api.travis-ci.com/MarniTausen/Greenotyper.svg?branch=master)](https://travis-ci.com/MarniTausen/Greenotyper)
 
 Greenotyper is a image analysis tool for large scale plant phenotyping experiments.
 
