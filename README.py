@@ -2,6 +2,8 @@ from PythonKnitr import Knitr
 
 document = Knitr("Greenotyper", "Marni Tausen")
 
+document.text("[![Build Status](https://api.travis-ci.com/MarniTausen/Greenotyper.svg?branch=master)](https://travis-ci.com/MarniTausen/Greenotyper)")
+
 document.text("""
 Greenotyper is a image analysis tool for large scale plant phenotyping experiments.
 
