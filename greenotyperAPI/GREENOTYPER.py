@@ -79,6 +79,7 @@ class pipeline_settings:
             self.placement_settings = ast.literal_eval(settings["placement_settings"])
         if "identification_settings" in settings:
             self.identification_settings = ast.literal_eval(settings["identification_settings"])
+        input_file.close()
     def write(self, filename):
         output_file = open(filename, "w")
         output_file.write("mask_settings;{}".format(self.mask_settings)+"\n")
@@ -89,7 +90,7 @@ class pipeline_settings:
 class Pipeline:
 
     def __get_version__(self):
-        self.__version__ = "0.5.9"
+        self.__version__ = "0.6.0.dev1"
         return self.__version__
 
     ## Initialization codes and file reading
@@ -133,8 +134,8 @@ class Pipeline:
             network_dir = pipeline.identification_settings['Network']
             if os.path.isdir(network_dir):
                 files = os.listdir(network_dir)
-                graph = os.path.join(network_dir,filter(lambda x: ".pb" in x and "txt" not in x, files)[0])
-                label = os.path.join(network_dir,filter(lambda x: ".pbtxt" in x, files)[0])
+                graph = os.path.join(network_dir,next(filter(lambda x: ".pb" in x and "txt" not in x, files)))
+                label = os.path.join(network_dir,next(filter(lambda x: ".pbtxt" in x, files)))
                 if hasattr(self, "loaded_graph"):
                     if graph!=self.loaded_graph:
                         self.load_graph(graph)
@@ -154,17 +155,20 @@ class Pipeline:
         '''
         self.detection_graph = tf.Graph()
         with self.detection_graph.as_default():
-            gd = tf.GraphDef()
-            with tf.gfile.GFile(graph_file, 'rb') as fg:
+            gd = tf.compat.v1.GraphDef()
+            with tf.compat.v2.io.gfile.GFile(graph_file, 'rb') as fg:
                 sg = fg.read()
                 gd.ParseFromString(sg)
                 tf.import_graph_def(gd, name='')
+        self.loaded_graph = graph_file
     def read_pbtxt(self, label_file):
         '''
         Read pbtxt file from <label_file>
         Saves pbtxt file as self.label_map
         '''
-        items = open(label_file).read().split("item")
+        pbtxt_file = open(label_file)
+        items = pbtxt_file.read().split("item")
+        pbtxt_file.close()
         self.label_map = {}
         for item in items:
             elements = item.split("\n")
@@ -179,6 +183,7 @@ class Pipeline:
                     break
             if cid == None: continue
             self.label_map[int(cid)] = name
+        self.loaded_label = label_file
     def open_image(self, image_filename):
         '''
         Open an image using PILLOW
@@ -214,7 +219,7 @@ class Pipeline:
         The inferred bounding boxes in self.boxes
         '''
         with self.detection_graph.as_default():
-            with tf.Session(graph=self.detection_graph) as sess:
+            with tf.compat.v1.Session(graph=self.detection_graph) as sess:
                 image_tensor = self.detection_graph.get_tensor_by_name('image_tensor:0')
                 detection_boxes = self.detection_graph.get_tensor_by_name('detection_boxes:0')
                 detection_classes = self.detection_graph.get_tensor_by_name('detection_classes:0')
@@ -322,25 +327,11 @@ class Pipeline:
     def _between_group_distance(self, group1, group2):
         return sum([self._distance(self._center(box1), self._center(box2))
                     for box1, box2 in zip(group1, group2)])
-    def _within_group_distance(self, group):
-        group = sorted(group, key=lambda x: x[0])
-        return sum([self._distance(self._center(box1), self._center(box2))
-                    for box1, box2 in zip(group[:-1], group[1:])])
-    def _get_outer_region(self,group):
-        gleft, gright = float("inf"), float("-inf")
-        gtop, gbottom = float("inf"), float("-inf")
-        for box in group:
-            left, right, top, bottom = box
-            if left<gleft: gleft = left
-            if right>gright: gright = right
-            if top<gtop: gtop = top
-            if bottom>gbottom: gbottom = bottom
-        return gleft, gright, gtop, gbottom
     def _transform_values(self, values):
         return [int(values[0]*self.height), int(values[1]*self.width),
                 int(values[2]*self.height), int(values[3]*self.width)]
     def _center(self, x):
-        return [(x[0]+x[1])/2, (x[2]+x[3])/2]
+        return [(x[0]+x[1])//2, (x[2]+x[3])//2]
     class _region:
         def __init__(self, left, right, top, bottom):
             self.left = left
@@ -367,7 +358,7 @@ class Pipeline:
         last_point = points[0]
         for point in points[1:]:
             for t in range(0-width, 0+width):
-                rr, cc = line(last_point[1]+t, last_point[0]+t, point[1]+t, point[0]+t)
+                rr, cc = line(int(last_point[1]+t), int(last_point[0]+t), int(point[1]+t), int(point[0]+t))
                 try: self.image[rr, cc] = color
                 except: pass
             last_point = point
@@ -709,18 +700,18 @@ class Pipeline:
                                                     self._get_mean_max(color_correct_base[..., 2]))
             if self.ColorCorrectType=="minimum":
                 self.image[..., 0] = self._imadjust(self.image[..., 0],
-                                                    self._get_mean_max(color_correct_base[..., 0]))
+                                                    self._get_mean_min(color_correct_base[..., 0]))
                 self.image[..., 1] = self._imadjust(self.image[..., 1],
-                                                    self._get_mean_max(color_correct_base[..., 1]))
+                                                    self._get_mean_min(color_correct_base[..., 1]))
                 self.image[..., 2] = self._imadjust(self.image[..., 2],
-                                                    self._get_mean_max(color_correct_base[..., 2]))
+                                                    self._get_mean_min(color_correct_base[..., 2]))
             if self.ColorCorrectType=="both":
                 self.image[..., 0] = self._imadjust(self.image[..., 0],
-                                                    self._get_mean_max(color_correct_base[..., 0]))
+                                                    self._get_mean_min_max(color_correct_base[..., 0]))
                 self.image[..., 1] = self._imadjust(self.image[..., 1],
-                                                    self._get_mean_max(color_correct_base[..., 1]))
+                                                    self._get_mean_min_max(color_correct_base[..., 1]))
                 self.image[..., 2] = self._imadjust(self.image[..., 2],
-                                                    self._get_mean_max(color_correct_base[..., 2]))
+                                                    self._get_mean_min_max(color_correct_base[..., 2]))
     def _imadjust(self, channel, vin, vout=(0,255)):
         #assert len(channel) == 2, 'Channel must be 2-dimenisonal'
 
@@ -762,10 +753,11 @@ class Pipeline:
             line = line.split(sep)
             for column, value in zip(_header, line):
                 table[column].append(value)
+        _file.close()
         return table
     def read_name_map(self, filename):
         table = self._read_csv(filename)
-        n = len(table[table.keys()[0]])
+        n = len(table[list(table.keys())[0]])
 
         Columns = ["Name", "NS", "EW"]
         for colname in Columns:
@@ -783,7 +775,7 @@ class Pipeline:
             self.name_map[ns][ew] = name
     def read_camera_map(self, filename):
         table = self._read_csv(filename)
-        n = len(table[table.keys()[0]])
+        n = len(table[list(table.keys())[0]])
 
         Columns = ["Camera", "NS", "EW", "Orientation"]
         for colname in Columns:

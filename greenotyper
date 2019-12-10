@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 
 from greenotyperAPI import *
-#import GRAPEapi
 from optparse import OptionParser
 import os
 import sys
@@ -104,18 +103,17 @@ if __name__=="__main__":
     Pipeline.load_pipeline(PipelineSettings)
 
     if options.OrganizeOutput:
-        #if threads==1:
         filename, output_file = options.OrganizeOutput
-        Pipeline.organize_output(filename, output_file)
-        sys.exit()
-        #else:
-        #    directory, output_file = options.JoinOutput
-        #    Pipeline.multi_join_output(directory, output_file, threads)
-        #    sys.exit()
+        if "greenness.csv" in filename:
+            Pipeline.greenness_output(filename, output_file)
+            sys.exit()
+        else:
+            Pipeline.organize_output(filename, output_file)
+            sys.exit()
 
     if (not hasattr(Pipeline, "detection_graph")) and (not hasattr(Pipeline, "label_map")):
         if network_dir is None:
-            raise GRAPE.ArgumentError("No network directory provided or available in pipeline settings. Use -n directory, or -h to see the help message\n Consider adding the network to a pipeline file using the PipelinePlanner")
+            raise GREENOTYPER.ArgumentError("No network directory provided or available in pipeline settings. Use -n directory, or -h to see the help message\n Consider adding the network to a pipeline file using the PipelinePlanner")
         else:
             if os.path.isdir(network_dir):
                 files = os.listdir(network_dir)

@@ -14,7 +14,7 @@ from skimage import io
 from greenotyperAPI import GREENOTYPER
 import greenotyperAPI
 from os import listdir, path, getcwd
-from qrangeslider import QRangeSlider
+from greenotyperAPI.GUI.qrangeslider import QRangeSlider
 import traceback
 #from multiprocessing import SimpleQueue
 
@@ -636,8 +636,8 @@ class GUI(QWidget):
             files = listdir(fileName)
             pb = filter(lambda x: ".pb" in x and "txt" not in x, files)
             pbtxt = filter(lambda x: ".pbtxt" in x, files)
-            self.PL.load_graph(path+pb[0])
-            self.PL.read_pbtxt(path+pbtxt[0])
+            self.PL.load_graph(path+next(pb))
+            self.PL.read_pbtxt(path+next(pbtxt))
             self.find_plants.setDisabled(False)
             self.PS.identification_settings['Network'] = path
     @pyqtSlot()
@@ -700,12 +700,12 @@ class GUI(QWidget):
         self.PS.placement_settings['GroupIdentifier'] = self.group_identifier_text.text()
 
     def _mask_process(self, progress_callback):
-        self.process_text.setText("producing mask (Apply Mask)")
+        progress_callback.emit("producing mask (Apply Mask)")
         self.UpdateMaskSettings()
 
         self.PL.mask_image()
 
-        self.process_text.setText("mask done, applying overlay (Apply Mask)")
+        progress_callback.emit("mask done, applying overlay (Apply Mask)")
 
         if self.fancy_overlay.isChecked():
             overlay_settings = self.overlay_input.text()
@@ -726,10 +726,22 @@ class GUI(QWidget):
             self.PL.inverse_mask()
         if self.negative_mask.isChecked():
             self.PL.basic_mask(self.PL.HEXtoRGB(self.color_input.text()))
-        self.process_text.setText("process complete! (Apply Mask)")
+        progress_callback.emit("process complete! (Apply Mask)")
+        #self.__onload_image(self.PL.image)
+        #self.masked = True
+        #self.masking_is_running = False
+    def _mask_update(self):
         self.__onload_image(self.PL.image)
         self.masked = True
         self.masking_is_running = False
+    def _mask_error(self, error):
+        exctype, value, errormsg = error
+        print(exctype)
+        print(value)
+        print(errormsg)
+        QMessageBox.about(self, "Error in Masking", str(value))
+        self.network_is_running = False
+        self.process_text.setText("Process failed!(Apply Mask)")
     @pyqtSlot()
     def ImageMask(self):
         if hasattr(self.PL, "image"):
@@ -749,6 +761,9 @@ class GUI(QWidget):
                 self.masking_is_running = True
                 worker = greenotyperAPI.GUI.PipelineRunner.Worker(self._mask_process)
                 self.threadpool.start(worker)
+                worker.signals.progress.connect(self._write_progress)
+                worker.signals.error.connect(self._mask_error)
+                worker.signals.finished.connect(self._mask_update)
         else:
             QMessageBox.question(self, '', "No image is loaded",
                                  QMessageBox.Ok, QMessageBox.Ok)
@@ -758,17 +773,17 @@ class GUI(QWidget):
         self.UpdatePipelineSettings()
         self.PL.load_pipeline(self.PS)
     def _network_process(self, progress_callback):
-        self.process_text.setText("finding plants (Find Plants)")
+        progress_callback.emit("finding plants (Find Plants)")
         self.UpdateMaskSettings()
         self.PL.infer_network_on_image()
         if self.pot_filteration.isChecked():
-            self.process_text.setText("running pot filteration (Find Plants)")
+            progress_callback.emit("running pot filteration (Find Plants)")
             self.PL.identify_group()
         if self.color_correct_check.isChecked():
-            self.process_text.setText("applying color correction (Find Plants)")
+            progress_callback.emit("applying color correction (Find Plants)")
             self.PL.color_correction()
         if self.draw_bounding_boxes.isChecked():
-            self.process_text.setText("drawing bounding boxes (Find Plants)")
+            progress_callback.emit("drawing bounding boxes (Find Plants)")
             self.PL.draw_bounding_boxes()
             self.__onload_image(self.PL.image)
         self.process_text.setText("process complete! (Find Plants)")
@@ -782,6 +797,8 @@ class GUI(QWidget):
         QMessageBox.about(self, "Error in Filteration", str(value))
         self.network_is_running = False
         self.process_text.setText("Process failed!(Find Plants)")
+    def _write_progress(self, value):
+        self.process_text.setText(value)
     @pyqtSlot()
     def FindPlants(self):
         if hasattr(self.PL, "image"):
@@ -792,6 +809,7 @@ class GUI(QWidget):
             self.network_is_running = True
             worker = greenotyperAPI.GUI.PipelineRunner.Worker(self._network_process)
             worker.signals.error.connect(self._network_error)
+            worker.signals.progress.connect(self._write_progress)
             self.threadpool.start(worker)
         else:
             QMessageBox.question(self, '', "No image is loaded",
@@ -863,7 +881,7 @@ class GUI(QWidget):
             self.next.setDisabled(False)
             self.previous.setDisabled(True)
             self.__set_crop_image(self.crop_list[self.current_crop])
-            #print(self.sample_list[self.current_crop])
+            print(self.sample_list[self.current_crop])
             self.crop_info.setText(" ".join(self.sample_list[self.current_crop]))
     def __set_crop_image(self, IMG):
         height, width, channel = IMG.shape
@@ -889,15 +907,15 @@ class GUI(QWidget):
         self.__set_crop_image(self.crop_list[self.current_crop])
         self.crop_info.setText(" ".join(self.sample_list[self.current_crop]))
 
-if __name__=="__main__":
-
-    PF = GREENOTYPER.Pipeline()
-
-    app = QApplication([])
-    app.setApplicationName("GREENOTYPER (v{})".format(PF.__version__))
-    scriptDir = path.dirname(path.realpath(__file__))
-    app.setWindowIcon(QtGui.QIcon(scriptDir + path.sep + 'icon/icon.png'))
-    gui = GUI()
-    gui.show()
-
-    exit(app.exec_())
+# if __name__=="__main__":
+#
+#     PF = GREENOTYPER.Pipeline()
+#
+#     app = QApplication([])
+#     app.setApplicationName("GREENOTYPER (v{})".format(PF.__version__))
+#     scriptDir = path.dirname(path.realpath(__file__))
+#     app.setWindowIcon(QtGui.QIcon(scriptDir + path.sep + 'icon/icon.png'))
+#     gui = GUI()
+#     gui.show()
+#
+#     exit(app.exec_())

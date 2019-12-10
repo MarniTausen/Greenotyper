@@ -1,7 +1,7 @@
 Greenotyper
 ================
 Marni Tausen
-21/10/2019 - 13:20:58
+21/10/2019 - 13:30:43
 
 -   [Installation](#installation)
 -   [General workflow guide](#general-workflow-guide)
@@ -19,9 +19,11 @@ paper doi: link here
 Installation
 ------------
 
-There are precompiled versions in the releases folder. **Currently there is only a Mac OS X version.** **There is no guarantee that works on versions less than 10.14.6**
+There are precompiled graphical versions in the releases folder.
 
-Install the package through conda:
+**Currently there is only a Mac OS X version.** **There is no guarantee that the version works on versions less than 10.14.6**
+
+Install the commandline package through conda:
 
 conda install -c *channel\_name* greenotyper
 
