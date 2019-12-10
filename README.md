@@ -1,4 +1,5 @@
 Greenotyper
+
 [![Build Status](https://api.travis-ci.com/MarniTausen/Greenotyper.svg?branch=master)](https://travis-ci.com/MarniTausen/Greenotyper)
 ================
 Marni Tausen
@@ -16,6 +17,17 @@ Greenotyper is a image analysis tool for large scale plant phenotyping experimen
 It uses google's object detection api ([github here](https://github.com/tensorflow/models/tree/master/research/object_detection)) to find the plants and thresholding to measure the size of the plants.
 
 paper doi: link here
+
+
+Requirements
+------------
+
+- python version 3.6 or 3.7
+- tensorflow v2.0.0 or higher
+- PyQt5 v5.9.2 or higher
+- numpy v1.15.2 or higher
+- pillow v5.2.0 or higher
+- scikit-image v0.14.0 or higher
 
 Installation
 ------------
