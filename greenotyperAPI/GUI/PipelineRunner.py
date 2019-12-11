@@ -8,7 +8,6 @@ from PyQt5.QtCore import (pyqtSlot, Qt, QTimer, QObject, QRunnable,
                           QThreadPool, pyqtSignal)
 from greenotyperAPI import *
 from greenotyperAPI.GUI import PipelinePlanner
-#from PlantFinderAPI.GUI import labelImg
 import os
 import multiprocessing as mp
 import traceback, sys
@@ -647,7 +646,7 @@ class PipelineRunner(QWidget):
         else:
             return string
     def generateCommandline(self, multi_image=True):
-        s = "GRAPE"
+        s = "greenotyper"
         if multi_image:
             s += " -t {}".format(int(self.multicore.text()))
         if not self.pipeline_file is None:

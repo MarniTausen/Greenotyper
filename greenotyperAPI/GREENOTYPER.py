@@ -90,7 +90,7 @@ class pipeline_settings:
 class Pipeline:
 
     def __get_version__(self):
-        self.__version__ = "0.6.0.dev2"
+        self.__version__ = "0.6.0.dev3"
         return self.__version__
 
     ## Initialization codes and file reading
@@ -463,7 +463,6 @@ class Pipeline:
         return mean_degree, var_degree, n, plot_image
     def _get_region_of_center(self, center, dim):
         return center[0]-dim, center[0]+dim, center[1]-dim, center[1]+dim
-
 
     ## COLOR CORRECTION
     def color_correction(self):

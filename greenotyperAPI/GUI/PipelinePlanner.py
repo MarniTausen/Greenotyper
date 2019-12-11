@@ -727,9 +727,6 @@ class GUI(QWidget):
         if self.negative_mask.isChecked():
             self.PL.basic_mask(self.PL.HEXtoRGB(self.color_input.text()))
         progress_callback.emit("process complete! (Apply Mask)")
-        #self.__onload_image(self.PL.image)
-        #self.masked = True
-        #self.masking_is_running = False
     def _mask_update(self):
         self.__onload_image(self.PL.image)
         self.masked = True

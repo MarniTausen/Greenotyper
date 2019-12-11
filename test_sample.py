@@ -1,7 +1,14 @@
 from greenotyperAPI import *
+import greenotyperAPI
 import os
 import unittest
 import numpy as np
+from PyQt5.QtWidgets import QApplication
+import PyQt5.QtGui as QtGui
+from PyQt5.QtCore import Qt
+from PyQt5.QtTest import QTest
+
+app = QApplication([])
 
 class TestFileReading(unittest.TestCase):
 
@@ -385,7 +392,22 @@ class TestMasking(unittest.TestCase):
     #
     #     self.assertTrue((self.PL.image==TestImage.image).all())
 
-#class TestBoundingBoxDrawing(unittest.TestCase):
+class TestBoundingBoxDrawing(unittest.TestCase):
+
+    def setUp(self):
+        PS = GREENOTYPER.pipeline_settings()
+        PS.read("sample_data/sample.pipeline")
+
+        self.PL = GREENOTYPER.Pipeline(pipeline=PS)
+        self.PL.open_image("sample_data/Cam41/Cam41_MT20180616113420_C39_69.jpg")
+        self.PL.infer_network_on_image()
+    def tearDown(self):
+        del self.PL
+
+    def test_draw_bounding_box(self):
+        self.PL.draw_bounding_boxes()
+
+        self.assertTrue(True)
 
 class TestOutputs(unittest.TestCase):
 
@@ -418,6 +440,44 @@ class TestOutputs(unittest.TestCase):
         self.PL.greenness_output("test_outputs/database.greenness.csv", "test_outputs/greenness")
 
         self.assertTrue(True)
+
+    #def test_crop_outputs(self): -> substructure sample
+    #def test_mask_outputs(self): -> substructure time
+    #def test_circular_hsv_figure(self):
+
+class TestsPipelineRunner(unittest.TestCase):
+
+    def setUp(self):
+        from greenotyperAPI.GUI import PipelineRunner
+        self.mainwindow = PipelineRunner.PipelineRunner()
+    def tearDown(self):
+        del self.mainwindow
+
+    def test_defaults(self):
+
+        self.mainwindow.setOutputSettings(self.mainwindow.PL)
+        self.mainwindow.updateCommandline()
+
+        self.assertTrue(True)
+
+class TestsPipelinePlanner(unittest.TestCase):
+    def setUp(self):
+        from greenotyperAPI.GUI import PipelinePlanner
+        self.mainwindow = PipelinePlanner.PipelinePlanner()
+    def tearDown(self):
+        del self.mainwindow
+
+    def test_defaults(self):
+
+        self.mainwindow.GUI.setDefaultValues()
+        self.mainwindow.GUI.read_image("sample_data/Cam41/Cam41_MT20180616113420_C39_69.jpg")
+        self.mainwindow.GUI.reload_image()
+
+        self.mainwindow.GUI.UpdatePipelineSettings()
+        self.mainwindow.GUI.UpdateMaskSettings()
+
+        self.assertTrue(True)
+
 
 
 if __name__=='__main__':
