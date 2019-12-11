@@ -7,8 +7,9 @@ from PyQt5.QtWidgets import QApplication
 import PyQt5.QtGui as QtGui
 from PyQt5.QtCore import Qt
 from PyQt5.QtTest import QTest
+import sys
 
-app = QApplication([])
+app = QApplication(sys.argv)
 
 class TestFileReading(unittest.TestCase):
 
