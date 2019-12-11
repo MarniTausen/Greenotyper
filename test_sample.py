@@ -54,8 +54,19 @@ class TestFileReading(unittest.TestCase):
         self.assertTrue(hasattr(self.PL, "_image_filename"))
         self.assertEqual(self.PL._image_filename,png_file)
         self.assertEqual(self.PL.image.shape[2],3)
-    #def test_write_pipeline(self):
-    #    self.assertTrue(False)
+    def test_write_pipeline(self):
+        PipelineSettings = GREENOTYPER.pipeline_settings()
+        PipelineSettings.read("sample_data/sample.pipeline")
+        PipelineSettings.write("test_data/test.pipeline")
+
+        sample_file = open("sample_data/sample.pipeline")
+        sample_contents = sample_file.read()
+        sample_file.close()
+        write_file = open("test_data/test.pipeline")
+        write_contents = write_file.read()
+        write_file.close()
+
+        self.assertTrue(sample_contents==write_contents)
 
 class TestDetection(unittest.TestCase):
 
@@ -249,7 +260,6 @@ class TestThresholding(unittest.TestCase):
         self.assertEqual(nb1, b1)
         self.assertEqual(nb2, b2)
 
-
 class TestColorCorrection(unittest.TestCase):
 
     def setUp(self):
@@ -311,55 +321,104 @@ class TestColorCorrection(unittest.TestCase):
         self.assertTrue(highest==255)
         self.assertTrue(lowest==0)
 
+class TestMasking(unittest.TestCase):
+
+    def setUp(self):
+        PS = GREENOTYPER.pipeline_settings()
+        PS.read("sample_data/sample.pipeline")
+
+        self.PL = GREENOTYPER.Pipeline(pipeline=PS)
+        self.PL.open_image("sample_data/Cam41/Cam41_MT20180616113420_C39_69.jpg")
+        self.PL.infer_network_on_image()
+    def tearDown(self):
+        del self.PL
+
+    def test_mask(self):
+        self.PL.mask_image()
+        self.assertTrue(hasattr(self.PL, "_mask"))
+    # def test_fancy_overlay(self):
+    #     self.PL.mask_image()
+    #     self.PL.fancy_overlay()
+    #
+    #     #self.PL.save_image("test_data/fancy_overlay_image.jpeg")
+    #
+    #     PS = GREENOTYPER.pipeline_settings()
+    #     PS.read("sample_data/sample.pipeline")
+    #     TestImage = GREENOTYPER.Pipeline(pipeline=PS)
+    #     TestImage.open_image("test_data/fancy_overlay_image.jpeg")
+    #
+    #     #print(self.PL.image==TestImage.image)
+    #     #print(self.PL.image.shape)
+    #     #print(TestImage.image.shape)
+    #
+    #     self.assertTrue((self.PL.image==TestImage.image).all())
+    # def test_inverse_mask(self):
+    #     self.PL.mask_image()
+    #     self.PL.inverse_mask()
+    #
+    #     #self.PL.save_image("test_data/inverse_mask_image.jpeg")
+    #
+    #     PS = GREENOTYPER.pipeline_settings()
+    #     PS.read("sample_data/sample.pipeline")
+    #     TestImage = GREENOTYPER.Pipeline(pipeline=PS)
+    #     TestImage.open_image("test_data/inverse_mask_image.jpeg")
+    #
+    #     print(self.PL.image==TestImage.image)
+    #     print(self.PL.image.shape)
+    #     print(TestImage.image.shape)
+    #
+    #     self.assertTrue((self.PL.image==TestImage.image).all())
+    # def test_basic_mask(self):
+    #     self.PL.mask_image()
+    #     self.PL.basic_mask(self.PL.HEXtoRGB("#AA2222"))
+    #
+    #     #self.PL.save_image("test_data/basic_mask_image.jpeg")
+    #
+    #     PS = GREENOTYPER.pipeline_settings()
+    #     PS.read("sample_data/sample.pipeline")
+    #     TestImage = GREENOTYPER.Pipeline(pipeline=PS)
+    #     TestImage.open_image("test_data/basic_mask_image.jpeg")
+    #
+    #     print(self.PL.image==TestImage.image)
+    #     print(self.PL.image.shape)
+    #     print(TestImage.image.shape)
+    #
+    #     self.assertTrue((self.PL.image==TestImage.image).all())
+
+#class TestBoundingBoxDrawing(unittest.TestCase):
+
+class TestOutputs(unittest.TestCase):
+
+    def setUp(self):
+        PS = GREENOTYPER.pipeline_settings()
+        PS.read("sample_data/sample.pipeline")
+
+        self.PL = GREENOTYPER.Pipeline(pipeline=PS)
+    def tearDown(self):
+        del self.PL
+
+    def test_crop_and_label_pots_1_image_size(self):
+        self.PL.open_image("sample_data/Cam41/Cam41_MT20180616113420_C39_69.jpg")
+        self.PL.infer_network_on_image()
+        self.PL.measure_size = (True, "test_outputs")
+
+        self.PL.crop_and_label_pots()
+
+        self.PL.organize_output("test_outputs/database.size.csv", "test_outputs/sizes.csv")
+
+        self.assertTrue(True)
+
+    def test_crop_and_label_pots_1_image_greenness(self):
+        self.PL.open_image("sample_data/Cam41/Cam41_MT20180616113420_C39_69.jpg")
+        self.PL.infer_network_on_image()
+        self.PL.measure_greenness = (True, "test_outputs")
+
+        self.PL.crop_and_label_pots()
+
+        self.PL.greenness_output("test_outputs/database.greenness.csv", "test_outputs/greenness")
+
+        self.assertTrue(True)
+
 
 if __name__=='__main__':
     unittest.main()
-
-    #import numpy as np
-
-    #PS = GRAPE.pipeline_settings()
-
-    #network_dir = "network"
-
-    #files = os.listdir(network_dir)
-    #graph = os.path.join(network_dir,filter(lambda x: ".pb" in x and "txt" not in x, files)[0])
-    #label = os.path.join(network_dir,filter(lambda x: ".pbtxt" in x, files)[0])
-
-    #PL = GRAPE.Pipeline(graph, label)
-    #PL.load_pipeline(PS)
-    #PL.open_image("sample_images/Cam41_MT20180616113420_C39_69.jpg")
-    #PL.read_camera_map("camera_map.csv")
-    #PL.read_name_map("round1.csv")
-    #PL.infer_network_on_image()
-    #PL.identify_group()
-    #PL.color_correction()
-    #PL.test_green_measure()
-
-    #p1 = [5, 3, 4, 5, 6, 7, 8, 9, 4, 5, 6, 7, 3, 5, 6]
-    #p2 = [3, 2, 3, 4, 4, 5, 5, 6, 10, 4, 5, 1, 2, 4, 3]
-
-    #d1 = PL._ttest_data(np.mean(p1), np.var(p1, ddof=1), len(p1))
-    #d2 = PL._ttest_data(np.mean(p2), np.var(p2, ddof=1), len(p2))
-
-    #print(PL.welch_ttest(d1, d2))
-
-    # alpha_deg = np.array([13, 15, 21, 26, 28, 30, 35,
-    #                       36, 41, 60, 92, 103])
-    # alpha_rad = PL.angel2radian(alpha_deg)
-    #
-    # beta_deg = np.array([110, 119, 131, 145,
-    #                      177, 199, 220, 291, 320, 340, 355])
-    # beta_rad = PL.angel2radian(beta_deg)
-    #
-    # print(alpha_rad)
-    # print(beta_rad)
-    #
-    # R_alpha = PL._circ_r(alpha_rad)
-    # R_beta = PL._circ_r(beta_rad)
-    #
-    # print(R_alpha)
-    # print(R_beta)
-    #
-    # pval = PL.circ_ktest(alpha_rad, beta_rad)
-    #
-    # print(pval)

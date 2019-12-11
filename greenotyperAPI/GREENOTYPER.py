@@ -90,7 +90,7 @@ class pipeline_settings:
 class Pipeline:
 
     def __get_version__(self):
-        self.__version__ = "0.6.0.dev1"
+        self.__version__ = "0.6.0.dev2"
         return self.__version__
 
     ## Initialization codes and file reading
@@ -342,16 +342,6 @@ class Pipeline:
             return self.left<=item[0] and self.right>=item[0] and self.top<=item[1] and self.bottom>=item[1]
         def __str__(self):
             return "REGION CLASS - left:{}, right:{}, top:{}, bottom:{}".format(self.left, self.right, self.top, self.bottom)
-    class _interval:
-        def __init__(self, start, stop):
-            self.start = start
-            self.stop = stop
-        def __contains__(self, item):
-            return self.start<=item and item<=self.stop
-        def __getitem__(self, item):
-            if item==0: return self.start
-            if item==1: return self.stop
-            return None
 
     ## Draw and mask options
     def draw_line(self, points, width = 1, color=(255, 0, 0)):
@@ -429,138 +419,6 @@ class Pipeline:
         hexstring = hexstring.split("#")[-1]
         return (int(hexstring[0:2], 16), int(hexstring[2:4], 16), int(hexstring[4:6], 16))
 
-    ## GREENNESS MEASURES
-    # Experimental version.
-    def __outdated_green_measure(self):
-        if not hasattr(self, "._mask"):
-            self.mask_image()
-        self.inverse_mask()
-        i = 1
-        self.boxes["POT"] = sorted(self.boxes["POT"], key=lambda x: self._center(x)[1])
-        above = sorted(self.boxes["POT"][:5], key=lambda x: self._center(x)[0],
-                        reverse=True)
-        below = sorted(self.boxes["POT"][5:], key=lambda x: self._center(x)[0],
-                           reverse=True)
-        self.boxes["POT"] = below+above
-        basename = self._image_filename.split("/")[-1].split(".")[0]
-        time_stamp = self.prettifyTime(basename.split("_")[1])
-        #print(self.boxes["POT"][8])
-        if len(self.boxes["POT"])<10:
-            return None
-        for pot in self.boxes["POT"]:
-            c = self._center(pot)
-            dim = 200
-            left, right, top, bottom = self._get_region_of_center(c, dim)
-            io.imsave("Masks/Pot{}/{}.jpg".format(i, basename), self.image[top:bottom, left:right])
-            mini_img = np.copy(self.image[top:bottom, left:right])
-            mini_mask = np.copy(self._mask[top:bottom, left:right])
-
-            mini_lab = rgb2lab(mini_img)
-
-            a_hist, bin_edges = np.histogram(np.squeeze(mini_lab[..., 1]), bins=range(-128,128))
-            b_hist, _ = np.histogram(np.squeeze(mini_lab[..., 2]), bins=range(-128,128))
-            print(np.squeeze(mini_lab[mini_mask==0, 1]))
-            a_mean = np.mean(np.squeeze(mini_lab[mini_mask==0, 1]))
-            b_mean = np.mean(np.squeeze(mini_lab[mini_mask==0, 2]))
-            if not np.isnan(a_mean):
-                a_index = list(bin_edges).index(int(a_mean))
-                b_index = list(bin_edges).index(int(b_mean))
-                a_height = sum(a_hist[(int(a_index)-3):(int(a_index)+3)])/6
-                b_height = sum(b_hist[(int(b_index)-3):(int(b_index)+3)])/6
-                pixel_count = len(np.squeeze(mini_lab[mini_mask==0, 1]))
-                a_cor = ((-a_mean)*a_height)/pixel_count
-                b_cor = (b_mean*b_height)/pixel_count
-            else:
-                a_mean = 0
-                b_mean = 0
-                a_cor = 0
-                b_cor = 0
-
-            summary_file = open("Results/Pot{}/{}.csv".format(i, basename), "w")
-            summary_file.write(",Pot{}\n".format(i))
-            summary_file.write("Time,{}\n".format(time_stamp))
-            summary_file.write("GreenYellowDiff,{}\n".format((-a_mean)-b_mean))
-            summary_file.write("GreenYellowCor,{}\n".format(a_cor-b_cor))
-            summary_file.close()
-            i += 1
-    def _get_region_of_center(self, center, dim):
-        return center[0]-dim, center[0]+dim, center[1]-dim, center[1]+dim
-    def green_measure(self):
-        if not hasattr(self, "camera_map"):
-            raise Exception("No camera map has been loaded! Unable to label objects")
-        if not hasattr(self, "name_map"):
-            raise Exception("No name map has been loaded! Unable to label objects")
-        if self.PlantLabel not in self.boxes:
-            raise Exception("No plants available to label")
-        if len(self.boxes[self.PlantLabel])!=(self.nrow*self.ncol):
-            print("WARNING: Missing plants! Skipping this step.")
-            return None
-
-        camera, time_base, timestamp = self._get_camera_id_and_time_stamp()
-
-        time_dir = self._format_time(time_base, "%YY%mM%dD")
-
-        NS = self.camera_map[camera]['NS']
-        EW = self.camera_map[camera]['EW']
-        orient = self.camera_map[camera]['orient']
-
-        labels = self._get_pot_labels(NS, EW, orient)
-
-        pots = self.boxes[self.PlantLabel]
-
-        #greenness_file = self.filelocking_csv_writer(os.path.join(self.measure_greenness[1],"database.greenness.csv"))
-        #greenness_rows = []
-
-        for pot, label in zip(pots, labels):
-            name = self.name_map[label[0]][label[1]]
-            c = self._center(pot)
-            dim = self.dim
-            left, right, top, bottom = c[0]-dim, c[0]+dim, c[1]-dim, c[1]+dim
-
-            #print(self._get_active_dirs())
-
-            if self.substructure[0]:
-                if self.substructure[1]=="Sample":
-                    new_dir = os.path.join(self.measure_greenness[1], name)
-                    if not os.path.isdir(new_dir):
-                        os.mkdir(new_dir)
-                    base_dir = name
-                if self.substructure[1]=="Time":
-                    new_dir = os.path.join(self.measure_greenness[1], time_dir)
-                    #print(new_dir)
-                    if not os.path.isdir(new_dir):
-                        os.mkdir(new_dir)
-                    base_dir = time_dir
-            else:
-                base_dir = ""
-
-            output_name = os.path.join(base_dir, name+"_"+time_base)
-
-            mini_img = np.copy(self.image[top:bottom, left:right])
-            mini_hsv, mini_lab = None, None
-            if self.HSV['enabled']: mini_hsv = self.HSVmask(img = mini_img)
-            if self.LAB['enabled']: mini_lab = self.LABmask(img = mini_img)
-            if mini_hsv is None:
-                mini_mask = mini_lab
-            elif mini_lab is None:
-                mini_mask = mini_hsv
-            else:
-                mini_mask = self.combinemasks(mini_hsv, mini_lab)
-            mini_mask_0 = mini_mask==0
-
-            mean_degree, var_degree, n, plot_image = self.__circular_hsv(mini_img, mini_mask_0, plot=True)
-
-            if not plot_image is None:
-                mini_img[~mini_mask_0] = (0,0,0)
-
-                new_image = np.concatenate((plot_image, mini_img), axis=1)
-
-                Image.fromarray(new_image).save(os.path.join(self.measure_greenness[1],output_name+".png"), "JPEG")
-
-            #greenness_rows.append([name, timestamp, str(mean_degree), str(var_degree), str(n)])
-
-        #greenness_file.write_rows(greenness_rows)
-        #greenness_file.close()
     def __circular_hsv(self, mini_img, mini_mask_0, plot=True):
         mini_hsv = rgb2hsv(mini_img)
         mini_h = mini_hsv[mini_mask_0, 0]*360
@@ -603,82 +461,9 @@ class Pipeline:
 
 
         return mean_degree, var_degree, n, plot_image
-    def _circ_r(self, alpha, w=[], d=0, dim=0):
-        if w==[]:
-            w = np.ones(len(alpha)) ## Make a vector of 1 with length of alpha
+    def _get_region_of_center(self, center, dim):
+        return center[0]-dim, center[0]+dim, center[1]-dim, center[1]+dim
 
-        #r = sum(w .* exp(1j * alpha), dim)
-        ## np.sum() for axis option if multi-dimensional
-        ## np.multiply for elementwise multiplication
-        ## np.exp is elementwise complex number exponential
-        ## 1j * alpha, converts the radians into complex numbers.
-        r = np.sum(np.multiply(w, np.exp(1j*alpha)), axis=dim)
-
-        r = abs(r) / np.sum(w, axis=dim)
-
-        if d != 0:
-          c = d/2/sin(d/2)
-          r = c*r
-
-        return r
-    def angel2radian(self, alpha):
-        return alpha * np.pi / 180
-    def circ_ktest(self, alpha1, alpha2):
-        from scipy.stats import f as fdist
-        ## Flatten array?
-        # alpha1 = alpha1(:)
-        # alpha2 = alpha2(:)
-
-        n1 = len(alpha1)
-        n2 = len(alpha2)
-
-        R1 = n1*self._circ_r(alpha1)
-        R2 = n2*self._circ_r(alpha2)
-
-        rbar = (R1+R2)/(n1+n2)
-
-        if rbar < 0.7:
-            print("Vector length must be > 0.7")
-
-        f = ((n2-1)*(n1-R1))/((n1-1)*(n2-R2))
-        if f > 1:
-            pval = 2*(1-fdist.cdf(f, n1, n2))
-        else:
-            f = 1/f
-            pval = 2*(1-fdist.cdf(f, n1, n2))
-
-        return pval
-
-    def welch_ttest(self,d1, d2):
-        from scipy.stats import t as tdist
-        s_delta = self._welch_sd(d1, d2)
-        t = (d1.mean-d2.mean)/s_delta
-        df = self._welch_df(d1, d2)
-        pval = tdist.sf(np.abs(t), df-1)*2
-        return t, df, pval
-    def _welch_sd(self,d1, d2):
-        from math import sqrt
-        return sqrt(d1.var/d1.n + d2.var/d2.n)
-    def _welch_df(self,d1, d2):
-        numerator = (d1.var/d1.n + d2.var/d2.n)**2
-        pd1 = ((d1.var/d1.n)**2)/(d1.n-1)
-        pd2 = ((d2.var/d2.n)**2)/(d2.n-1)
-        denominator = pd1 + pd2
-        return numerator/denominator
-    class _ttest_data:
-        def __init__(self, mean, var, n):
-            self.mean = mean
-            self.var = var
-            self.n = n
-            self.items = {"mean": self.mean,
-                          "var": self.var,
-                          "n": self.n}
-        def __str__(self):
-            return "mean: {}, var: {}, n: {}".format(self.mean, self.var, self.n)
-        def __rep__(self):
-            return self.__str__()
-        def __getitem__(self, key):
-            return self.items[key]
 
     ## COLOR CORRECTION
     def color_correction(self):
@@ -819,6 +604,16 @@ class Pipeline:
                     labels.append([ns, ew])
 
         return(labels)
+    class _interval:
+        def __init__(self, start, stop):
+            self.start = start
+            self.stop = stop
+        def __contains__(self, item):
+            return self.start<=item and item<=self.stop
+        def __getitem__(self, item):
+            if item==0: return self.start
+            if item==1: return self.stop
+            return None
     def _get_camera_id_and_time_stamp(self):
         fn_pattern = self.pipeline_settings.identification_settings['FilenamePattern']
         ID_search = "{ID}"
@@ -910,8 +705,10 @@ class Pipeline:
             crop_list = []
             sample_list = []
         else:
-            growth_file = self.filelocking_csv_writer(os.path.join(self.measure_size[1],"database.size.csv"))
-            greenness_file = self.filelocking_csv_writer(os.path.join(self.measure_greenness[1],"database.greenness.csv"))
+            if self.measure_size[0]:
+                growth_file = self.filelocking_csv_writer(os.path.join(self.measure_size[1],"database.size.csv"))
+            if self.measure_greenness[0]:
+                greenness_file = self.filelocking_csv_writer(os.path.join(self.measure_greenness[1],"database.greenness.csv"))
 
             growth_rows = []
             greenness_rows = []
@@ -920,7 +717,7 @@ class Pipeline:
             name = self.name_map[label[0]][label[1]]
             c = self._center(pot)
             dim = self.dim
-            left, right, top, bottom = c[0]-dim, c[0]+dim, c[1]-dim, c[1]+dim
+            left, right, top, bottom = self._get_region_of_center(c, dim)
 
             if self.substructure[0]:
                 if self.substructure[1]=="Sample":
@@ -959,7 +756,7 @@ class Pipeline:
 
                 if self.measure_size[0]:
                     blackpixels = np.where(mini_mask_0)
-                    blackpixels = np.matrix(blackpixels)
+                    blackpixels = np.array(blackpixels)
                     size = str(blackpixels.shape[1])
 
                     growth_rows.append([name, timestamp, size])
@@ -988,29 +785,17 @@ class Pipeline:
         if return_crop_list:
             return crop_list, sample_list
         else:
-            growth_file.write_rows(growth_rows)
-            growth_file.close()
-            greenness_file.write_rows(greenness_rows)
-            greenness_file.close()
+            if self.measure_size[0]:
+                growth_file.write_rows(growth_rows)
+                growth_file.close()
+            if self.measure_greenness[0]:
+                greenness_file.write_rows(greenness_rows)
+                greenness_file.close()
 
     class filelocking_csv_writer:
         def __init__(self, filename, sep=","):
             self._file = open(filename, "a", buffering=1)
             self.sep = sep
-        def write_row(self, row):
-            while True:
-                try:
-                    fcntl.flock(self._file, fcntl.LOCK_EX | fcntl.LOCK_NB)
-                    break
-                except IOError as e:
-                    # raise on unrelated IOErrors
-                    if e.errno != errno.EAGAIN:
-                        raise
-                    else:
-                        time.sleep(0.01)
-            self._file.write(self.sep.join(row))
-            self._file.write("\n")
-            fcntl.flock(self._file, fcntl.LOCK_UN)
         def write_rows(self, rows):
             while True:
                 try:
@@ -1110,92 +895,6 @@ class Pipeline:
             outfile.write_row(row)
             del unsorted_output[time_point]
 
-    def scan_directory(self, directory):
-        items = os.listdir(directory)
-        files = []
-        for item in items:
-            if '.'==item[0]: continue
-            item_fp = os.path.join(directory, item)
-            if os.path.isfile(item_fp):
-                files.append(item_fp)
-            else:
-                internal_items = self.scan_directory(item_fp)
-                for in_item in internal_items:
-                    files.append(in_item)
-        return files
-    def _read_csv_data_file(self, filename, sep=","):
-        _file = open(filename)
-        header = _file.readline()[:-1].split(sep)
-        return [(key,value) for key, value in zip(header, _file.readline().split(sep))]
-    def _put_data_in(self, Time, Measure):
-        if Time[1] not in self.unsorted_output:
-            self.unsorted_output[Time[1]] = {}
-        self.unsorted_output[Time[1]][Measure[0]] = Measure[1]
-        self.samples.add(Measure[0])
-    def old_join_output(self, directory, output_file):
-        outfile = self.csv_writer(output_file)
-        all_files = self.scan_directory(directory)
-        unsorted_output = {}
-        samples = set()
-        n = 1
-        for filename in all_files:
-            print(filename, n)
-            n += 1
-            try:
-                Time, Measure = self._read_csv_data_file(filename)
-            except:
-                continue
-            if Time[1] not in unsorted_output:
-                unsorted_output[Time[1]] = {}
-            unsorted_output[Time[1]][Measure[0]] = Measure[1]
-            samples.add(Measure[0])
-        time_series = sorted(unsorted_output.keys())
-        samples = sorted(list(samples))
-        outfile.init_header(["Time"]+samples)
-        outfile.write_header()
-
-        for time_point in time_series:
-            row = [time_point]
-            for sample in samples:
-                if sample in unsorted_output[time_point]:
-                    row.append(unsorted_output[time_point][sample])
-                else:
-                    row.append("NA")
-            outfile.write_row(row)
-            del unsorted_output[time_point]
-
-    def join_output(self, directory, output_file):
-        outfile = self.csv_writer(output_file)
-        all_files = self.scan_directory(directory)
-        unsorted_output = {}
-        samples = set()
-        n = 1
-        for filename in all_files:
-            print(filename, n)
-            n += 1
-            try:
-                Time, Measure = self._read_csv_data_file(filename)
-            except:
-                continue
-            if Time[1] not in unsorted_output:
-                unsorted_output[Time[1]] = {}
-            unsorted_output[Time[1]][Measure[0]] = Measure[1]
-            samples.add(Measure[0])
-        time_series = sorted(unsorted_output.keys())
-        samples = sorted(list(samples))
-        outfile.init_header(["Time"]+samples)
-        outfile.write_header()
-
-        for time_point in time_series:
-            row = [time_point]
-            for sample in samples:
-                if sample in unsorted_output[time_point]:
-                    row.append(unsorted_output[time_point][sample])
-                else:
-                    row.append("NA")
-            outfile.write_row(row)
-            del unsorted_output[time_point]
-
     def greenness_output(self, filename, output_file):
         datafile = self.simple_csv_reader(filename)
         base_stats = {}
@@ -1205,10 +904,12 @@ class Pipeline:
             name, time, mean, var, n = line
             if name not in base_stats:
                 base_stats[name] = {}
-            base_stats[name][time] = self._ttest_data(float(mean), float(var), int(n))
+            base_stats[name][time] = {'mean': float(mean),
+                                      'var': float(var),
+                                      'n': int(n)}
             times.add(time)
         times = sorted(list(times))
-        samples = base_stats.keys()
+        samples = list(base_stats.keys())
         #print(times)
         #print(samples)
 
