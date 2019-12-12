@@ -459,8 +459,6 @@ class TestsPipelineRunner(unittest.TestCase):
         self.mainwindow.setOutputSettings(self.mainwindow.PL)
         self.mainwindow.updateCommandline()
 
-        self.mainwindow.generateWorkflowFile()
-
         self.assertTrue(True)
 
 class TestsPipelinePlanner(unittest.TestCase):
