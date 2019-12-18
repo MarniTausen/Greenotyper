@@ -86,9 +86,11 @@ if __name__=="__main__":
         app = QApplication([])
         app.setApplicationName("GREENOTYPER")
         scriptDir = os.path.dirname(os.path.realpath(__file__))
-        app.setWindowIcon(QtGui.QIcon(scriptDir + os.path.sep + 'icon/icon.png'))
+        #app.setWindowIcon(QtGui.QIcon(scriptDir + os.path.sep + 'icon/icon.png'))
+        app.setWindowIcon(QtGui.QIcon(os.path.join(sys.prefix,'icon.png')))
         mainwindow = PipelineRunner()
-        mainwindow.windowicon = QtGui.QIcon(scriptDir + os.path.sep + 'icon/icon.png')
+        #mainwindow.windowicon = QtGui.QIcon(scriptDir + os.path.sep + 'icon/icon.png')
+        mainwindow.windowicon = QtGui.QIcon(os.path.join(sys.prefix,'icon.png'))
         mainwindow.show()
         sys.exit(app.exec_())
 

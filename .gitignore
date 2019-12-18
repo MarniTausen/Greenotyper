@@ -7,3 +7,9 @@
 **/dist
 
 **/htmlcov
+
+/*.egg-info
+
+*.coverage
+
+*.cache

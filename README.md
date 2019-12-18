@@ -56,9 +56,16 @@ Starting a new workflow requires setting up and testing the pipeline. It starts 
 greenotyper --GUI
 ```
 
+To open the pipeline planner, click the Pipeline planner button.
 
+Testing the plant area detection, the network and pipeline settings are all done through the pipeline planner. For information on how use the interface go to the next section, and for general information on Pipeline setups click [here](#pipeline-setup-guide).
 
+Running the pipeline is done either through the commandline or through the GUI. The commandline is more efficient and can more easily be deployed on computing clusters.
 
+The pipeline can be run on individual images or directories of images. The results are a single "database" file, which uses filelocking. (If your file system has blocked filelocking, then there is no guarantee the results will be correctly written when run using multi processing.)
+
+To organize the results into a table you can use the commandline option:
+"greenotyper -p mypipeline.pipeline -o input_file.csv output_file.csv"
 
 GUI interface guide
 -------------------
