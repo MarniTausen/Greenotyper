@@ -44,7 +44,7 @@ pip install greenotyper
 ```
 Install greenotyper through conda:
 ```
-conda install -c *channel\_name* greenotyper
+no available yet
 ```
 
 
