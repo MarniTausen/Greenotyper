@@ -30,12 +30,35 @@ There are precompiled graphical versions in the releases folder.
 
 **Currently there is only a Mac OS X version.** **There is no guarantee that the version works on versions less than 10.14.6**
 
-Install the commandline package through conda:
+It is recommended to install the tool in a virtualenv or in an environment in conda. Example:
+```
+conda create -n greenotyper_env python=3.7
 
+conda activate greenotyper_env
+
+# Install greenotyper either with pip or conda
+```
+Install greenotyper through pip:
+```
+pip install greenotyper
+```
+Install greenotyper through conda:
+```
 conda install -c *channel\_name* greenotyper
+```
+
 
 General workflow guide
 ----------------------
+
+Starting a new workflow requires setting up and testing the pipeline. It starts by opening the pipeline planner. Either you open the Greenotyper app, or opening the GUI through the commandline interface:
+```
+greenotyper --GUI
+```
+
+
+
+
 
 GUI interface guide
 -------------------
