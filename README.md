@@ -1,6 +1,6 @@
-Greenotyper (v0.6.0.dev3)
+Greenotyper (v0.6.0.rc1)
 ================
-[![Build Status](https://api.travis-ci.com/MarniTausen/Greenotyper.svg?branch=master)](https://travis-ci.com/MarniTausen/Greenotyper)[![codecov](https://codecov.io/gh/MarniTausen/Greenotyper/branch/master/graph/badge.svg)](https://codecov.io/gh/MarniTausen/Greenotyper)
+[![Build Status](https://api.travis-ci.com/MarniTausen/Greenotyper.svg?branch=master)](https://travis-ci.com/MarniTausen/Greenotyper)[![codecov](https://codecov.io/gh/MarniTausen/Greenotyper/branch/master/graph/badge.svg)](https://codecov.io/gh/MarniTausen/Greenotyper)[![PyPI version](https://badge.fury.io/py/greenotyper.svg)](https://badge.fury.io/py/greenotyper)
 
 -   [Installation](#installation)
 -   [General workflow guide](#general-workflow-guide)
@@ -75,7 +75,7 @@ Command line interface guide
 
 Command usage help message:
 ```
-=========== GREENOTYPER (v0.6.0.dev3) ===========
+=========== GREENOTYPER (v0.6.0.rc1) ===========
 greenotyper -i image/directory -p settings.pipeline [options]
 
 Options:
