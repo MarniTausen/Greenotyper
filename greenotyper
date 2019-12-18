@@ -65,7 +65,7 @@ if __name__=="__main__":
     parser.add_option('--by_individual', action="store_true", dest="by_sample",
                       help="Subdividing the outputs based on per day. Recommended to avoid file system overflow.")
     parser.add_option('--GUI', action="store_true", dest="gui",
-                      help="Open up the GRAPE GUI.")
+                      help="Open up the GREENOTYPER GUI.")
     parser.add_option('-o', '--organize', type="string", nargs=2, dest="OrganizeOutput",
                       help="Organize and clean the output. Usage: --organize=input_file output_file. \n If included only this action will be performed.")
 

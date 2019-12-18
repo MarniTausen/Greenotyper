@@ -1,9 +1,6 @@
-Greenotyper
+Greenotyper (v0.6.0.dev3)
 ================
 [![Build Status](https://api.travis-ci.com/MarniTausen/Greenotyper.svg?branch=master)](https://travis-ci.com/MarniTausen/Greenotyper)[![codecov](https://codecov.io/gh/MarniTausen/Greenotyper/branch/master/graph/badge.svg)](https://codecov.io/gh/MarniTausen/Greenotyper)
-
-Marni Tausen
-10/12/2019 - 13:44:25
 
 -   [Installation](#installation)
 -   [General workflow guide](#general-workflow-guide)
@@ -14,10 +11,7 @@ Marni Tausen
 
 Greenotyper is a image analysis tool for large scale plant phenotyping experiments.
 
-It uses google's object detection api ([github here](https://github.com/tensorflow/models/tree/master/research/object_detection)) to find the plants and thresholding to measure the size of the plants.
-
-paper doi: link here
-
+It uses google's object detection api ([github link](https://github.com/tensorflow/models/tree/master/research/object_detection)) to find the plants and thresholding to measure the size of the plants.
 
 Requirements
 ------------
@@ -48,6 +42,47 @@ GUI interface guide
 
 Command line interface guide
 ----------------------------
+
+Command usage help message:
+```
+=========== GREENOTYPER (v0.6.0.dev3) ===========
+greenotyper -i image/directory -p settings.pipeline [options]
+
+Options:
+  -h, --help            show this help message and exit
+  -i IMAGE, --in=IMAGE  Input image or directory of images for inference
+                        (required)
+  -n NETWORK, --network=NETWORK
+                        Input neural network directory (required, if not
+                        provided with pipeline file).
+  -p PIPELINE, --pipeline=PIPELINE
+                        Pipeline file containing all settings
+  -t THREADS, --threads=THREADS
+                        Number of threads available. Only used to run on
+                        multiple images at a time. Default: 1. Settings less
+                        than 0 use all available cores.
+  -s SIZEDIRECTORY, --size_output=SIZEDIRECTORY
+                        Output directory for the size measurements. Default is
+                        no output.
+  -g GREENNESSDIRECTORY, --greenness_output=GREENNESSDIRECTORY
+                        Output directory for the greenness measurements.
+                        Default is no output.
+  -m MASKDIRECTORY, --mask_output=MASKDIRECTORY
+                        Output directory for the produced masks. Default is no
+                        output.
+  -c CROPDIRECTORY, --crop_output=CROPDIRECTORY
+                        Output directory for the cropped images. Default is no
+                        output.
+  --by_day              Subdividing the outputs based on per day. Recommended
+                        to avoid file system overflow.
+  --by_individual       Subdividing the outputs based on per day. Recommended
+                        to avoid file system overflow.
+  --GUI                 Open up the GREENOTYPER GUI.
+  -o ORGANIZEOUTPUT, --organize=ORGANIZEOUTPUT
+                        Organize and clean the output. Usage:
+                        --organize=input_file output_file.   If included only
+                        this action will be performed.
+```
 
 Pipeline setup guide
 --------------------
