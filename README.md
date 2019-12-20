@@ -36,15 +36,15 @@ conda create -n greenotyper_env python=3.7
 
 conda activate greenotyper_env
 
-# Install greenotyper either with pip or conda
+pip install greenotyper
 ```
-Install greenotyper through pip:
+Install the latest version of greenotyper through pip:
 ```
 pip install greenotyper
 ```
 Install greenotyper through conda:
 ```
-no available yet
+not available yet
 ```
 
 
@@ -65,7 +65,9 @@ Running the pipeline is done either through the commandline or through the GUI. 
 The pipeline can be run on individual images or directories of images. The results are a single "database" file, which uses filelocking. (If your file system has blocked filelocking, then there is no guarantee the results will be correctly written when run using multi processing.)
 
 To organize the results into a table you can use the commandline option:
-"greenotyper -p mypipeline.pipeline -o input_file.csv output_file.csv"
+```
+greenotyper -p mypipeline.pipeline -o input_file.csv output_file.csv
+```
 
 GUI interface guide
 -------------------
