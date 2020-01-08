@@ -87,15 +87,19 @@ First open the pipeline planner from the initial window.
 ![](README_images/open_pipeline_planner.gif)
 
 Open your image.
+
 ![](README_images/open_image.gif)
 
 Opening a trained network.
+
 ![](README_images/open_network.gif)
 
 After both an image and the network have been opened, you can run find plants feature. Clicking on Find plants will draw bounding boxes around the detected plants.
+
 ![](README_images/find_plants.gif)
 
 To test the detection of the plant area you can use apply mask function.
+
 ![](README_images/apply_mask.gif)
 
 #### Adjust mask settings
