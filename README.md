@@ -42,6 +42,11 @@ Install the latest version of greenotyper through pip:
 ```
 pip install greenotyper
 ```
+If there are problems with pip you can try calling pip3 instead:
+```
+pip3 install greenotyper
+```
+
 Install greenotyper through conda:
 ```
 not available yet
@@ -64,13 +69,42 @@ Running the pipeline is done either through the commandline or through the GUI. 
 
 The pipeline can be run on individual images or directories of images. The results are a single "database" file, which uses filelocking. (If your file system has blocked filelocking, then there is no guarantee the results will be correctly written when run using multi processing.)
 
-To organize the results into a table you can use the commandline option:
+To organise the results into a table you can use the commandline option:
 ```
 greenotyper -p mypipeline.pipeline -o input_file.csv output_file.csv
 ```
 
 GUI interface guide
 -------------------
+
+Open the app, or run the GUI from the terminal:
+https://github.com/MarniTausen/Greenotyper
+
+### Pipeline Planner
+
+#### Basics
+First open the pipeline planner from the initial window.
+![](README_images/open_pipeline_planner.gif)
+
+Open your image.
+![](README_images/open_image.gif)
+
+Opening a trained network.
+![](README_images/open_network.gif)
+
+After both an image and the network have been opened, you can run find plants feature. Clicking on Find plants will draw bounding boxes around the detected plants.
+![](README_images/find_plants.gif)
+
+To test the detection of the plant area you can use apply mask function.
+![](README_images/apply_mask.gif)
+
+#### Adjust mask settings
+
+#### Adjust pipeline settings
+
+### Pipeline Runner (Initial window)
+
+
 
 Command line interface guide
 ----------------------------
