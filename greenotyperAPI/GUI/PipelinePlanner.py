@@ -731,14 +731,14 @@ class GUI(QWidget):
         self.__onload_image(self.PL.image)
         self.masked = True
         self.masking_is_running = False
-    def _mask_error(self, error):
-        exctype, value, errormsg = error
-        print(exctype)
-        print(value)
-        print(errormsg)
-        QMessageBox.about(self, "Error in Masking", str(value))
-        self.network_is_running = False
-        self.process_text.setText("Process failed!(Apply Mask)")
+    # def _mask_error(self, error):
+    #     exctype, value, errormsg = error
+    #     print(exctype)
+    #     print(value)
+    #     print(errormsg)
+    #     QMessageBox.about(self, "Error in Masking", str(value))
+    #     self.network_is_running = False
+    #     self.process_text.setText("Process failed!(Apply Mask)")
     @pyqtSlot()
     def ImageMask(self):
         if hasattr(self.PL, "image"):
@@ -756,11 +756,14 @@ class GUI(QWidget):
                                  QMessageBox.Ok, QMessageBox.Ok)
             else:
                 self.masking_is_running = True
-                worker = greenotyperAPI.GUI.PipelineRunner.Worker(self._mask_process)
-                self.threadpool.start(worker)
-                worker.signals.progress.connect(self._write_progress)
-                worker.signals.error.connect(self._mask_error)
-                worker.signals.finished.connect(self._mask_update)
+                empty_signal = greenotyperAPI.GUI.PipelineRunner.WorkerSignals()
+                self._mask_process(empty_signal.progress)
+                self._mask_update()
+                #worker = greenotyperAPI.GUI.PipelineRunner.Worker(self._mask_process)
+                #self.threadpool.start(worker)
+                #worker.signals.progress.connect(self._write_progress)
+                #worker.signals.error.connect(self._mask_error)
+                #worker.signals.finished.connect(self._mask_update)
         else:
             QMessageBox.question(self, '', "No image is loaded",
                                  QMessageBox.Ok, QMessageBox.Ok)
@@ -783,17 +786,17 @@ class GUI(QWidget):
             progress_callback.emit("drawing bounding boxes (Find Plants)")
             self.PL.draw_bounding_boxes()
             self.__onload_image(self.PL.image)
-        self.process_text.setText("process complete! (Find Plants)")
+        progress_callback.emit("process complete! (Find Plants)")
         self.detected = True
         self.network_is_running = False
-    def _network_error(self, error):
-        exctype, value, errormsg = error
-        print(exctype)
-        print(value)
-        print(errormsg)
-        QMessageBox.about(self, "Error in Filteration", str(value))
-        self.network_is_running = False
-        self.process_text.setText("Process failed!(Find Plants)")
+    # def _network_error(self, error):
+    #     exctype, value, errormsg = error
+    #     print(exctype)
+    #     print(value)
+    #     print(errormsg)
+    #     QMessageBox.about(self, "Error in Filteration", str(value))
+    #     self.network_is_running = False
+    #     self.process_text.setText("Process failed!(Find Plants)")
     def _write_progress(self, value):
         self.process_text.setText(value)
     @pyqtSlot()
@@ -804,10 +807,13 @@ class GUI(QWidget):
                                      QMessageBox.Ok, QMessageBox.Ok)
                 return None
             self.network_is_running = True
-            worker = greenotyperAPI.GUI.PipelineRunner.Worker(self._network_process)
-            worker.signals.error.connect(self._network_error)
-            worker.signals.progress.connect(self._write_progress)
-            self.threadpool.start(worker)
+            empty_signal = greenotyperAPI.GUI.PipelineRunner.WorkerSignals()
+            self._network_process(empty_signal.progress)
+            ## Disabling MultiThreading due to refreashing issues in some versions of PyQt5
+            #worker = greenotyperAPI.GUI.PipelineRunner.Worker(self._network_process)
+            #worker.signals.error.connect(self._network_error)
+            #worker.signals.progress.connect(self._write_progress)
+            #self.threadpool.start(worker)
         else:
             QMessageBox.question(self, '', "No image is loaded",
                                  QMessageBox.Ok, QMessageBox.Ok)

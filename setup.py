@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="greenotyper",
-    version="0.6.0",
+    version="0.6.0.rc2",
     scripts=["greenotyper"],
     author="Marni Tausen",
     author_email="Marni16ox@gmail.com",
