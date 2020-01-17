@@ -42,25 +42,6 @@ class ImageLabel(QWidget):
                                       Qt.KeepAspectRatio, Qt.FastTransformation)
             painter.drawPixmap(rendering.rect(), self.p)
 
-class Canvas(QWidget):
-
-    def __init__(self, parent=None):
-        QWidget.__init__(self, parent=parent)
-
-        self.initUI()
-    def initUI(self):
-        self.setMinimumSize(225,125)
-        p = self.palette()
-        p.setColor(self.backgroundRole(), Qt.gray)
-        self.setPalette(p)
-        #self.show()
-    def paintEvent(self, event):
-        qp = QtGui.QPainter()
-        qp.begin(self)
-        self.drawRectangles(qp)
-    def drawRectangles(self, qp):
-        qp.drawRect(0, 0, 225, 124)
-
 class PipelinePlanner(QMainWindow):
 
     def __init__(self):

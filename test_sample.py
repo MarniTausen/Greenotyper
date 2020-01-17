@@ -477,6 +477,14 @@ class TestsPipelinePlanner(unittest.TestCase):
         self.mainwindow.GUI.UpdatePipelineSettings()
         self.mainwindow.GUI.UpdateMaskSettings()
 
+        self.mainwindow.GUI.PS.read("sample_data/sample.pipeline")
+        self.mainwindow.GUI.setDefaultValues()
+
+        self.mainwindow.GUI.FindPlants()
+        self.mainwindow.GUI.ImageMask()
+
+        self.mainwindow.GUI.TestCrop()
+
         self.assertTrue(True)
 
 
