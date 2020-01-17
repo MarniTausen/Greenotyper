@@ -1,4 +1,4 @@
-Greenotyper (v0.6.0.rc1)
+Greenotyper (v0.6.0)
 ================
 [![Build Status](https://api.travis-ci.com/MarniTausen/Greenotyper.svg?branch=master)](https://travis-ci.com/MarniTausen/Greenotyper)[![codecov](https://codecov.io/gh/MarniTausen/Greenotyper/branch/master/graph/badge.svg)](https://codecov.io/gh/MarniTausen/Greenotyper)[![PyPI version](https://badge.fury.io/py/greenotyper.svg)](https://badge.fury.io/py/greenotyper)
 
@@ -31,7 +31,7 @@ There are precompiled graphical versions in the releases folder.
 **Currently there is only a Mac OS X version.** **There is no guarantee that the version works on versions less than 10.14.6**
 
 It is recommended to install the tool in a virtualenv or in an environment in conda. Example:
-```
+```bash
 conda create -n greenotyper_env python=3.7
 
 conda activate greenotyper_env
@@ -39,11 +39,11 @@ conda activate greenotyper_env
 pip install greenotyper
 ```
 Install the latest version of greenotyper through pip:
-```
+```bash
 pip install greenotyper
 ```
 If there are problems with pip you can try calling pip3 instead:
-```
+```bash
 pip3 install greenotyper
 ```
 
@@ -57,7 +57,7 @@ General workflow guide
 ----------------------
 
 Starting a new workflow requires setting up and testing the pipeline. It starts by opening the pipeline planner. Either you open the Greenotyper app, or opening the GUI through the commandline interface:
-```
+```bash
 greenotyper --GUI
 ```
 
@@ -70,7 +70,7 @@ Running the pipeline is done either through the commandline or through the GUI. 
 The pipeline can be run on individual images or directories of images. The results are a single "database" file, which uses filelocking. (If your file system has blocked filelocking, then there is no guarantee the results will be correctly written when run using multi processing.)
 
 To organise the results into a table you can use the commandline option:
-```
+```bash
 greenotyper -p mypipeline.pipeline -o input_file.csv output_file.csv
 ```
 
@@ -115,7 +115,7 @@ Command line interface guide
 
 Command usage help message:
 ```
-=========== GREENOTYPER (v0.6.0.rc1) ===========
+=========== GREENOTYPER (v0.6.0) ===========
 greenotyper -i image/directory -p settings.pipeline [options]
 
 Options:

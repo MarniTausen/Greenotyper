@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="greenotyper",
-    version="0.6.0.rc1",
+    version="0.6.0",
     scripts=["greenotyper"],
     author="Marni Tausen",
     author_email="Marni16ox@gmail.com",
@@ -16,6 +16,13 @@ setuptools.setup(
     url="https://github.com/MarniTausen/Greenotyper",
     packages=setuptools.find_packages(),
     python_requires='~=3.6',
+    install_requires=[
+        "tensorflow>=2",
+        "PyQt5>=5.9",
+        "numpy>=1.15",
+        "scikit-image>=0.14",
+        "pillow>=5.2"
+    ],
     classifiers=[
         "Programming Language :: Python :: 3.6",
         "Programming Language :: Python :: 3.7",

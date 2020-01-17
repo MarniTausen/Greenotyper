@@ -90,7 +90,7 @@ class pipeline_settings:
 class Pipeline:
 
     def __get_version__(self):
-        self.__version__ = "0.6.0.rc1"
+        self.__version__ = "0.6.0"
         return self.__version__
 
     ## Initialization codes and file reading
@@ -867,6 +867,8 @@ class Pipeline:
                 raise StopIteration
             self.pos = self._file.tell()
             return data
+        def close(self):
+            self._file.close()
     def organize_output(self, filename, output_file):
         datafile = self.simple_csv_reader(filename)
         unsorted_output = {}
@@ -878,6 +880,7 @@ class Pipeline:
                 unsorted_output[time] = {}
             unsorted_output[time][name] = measure
             samples.add(name)
+        datafile.close()
         outfile = self.csv_writer(output_file)
         time_series = sorted(unsorted_output.keys())
         samples = sorted(list(samples))
