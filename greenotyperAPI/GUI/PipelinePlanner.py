@@ -86,8 +86,8 @@ class GUI(QWidget):
         self.threadpool = QThreadPool()
         self.masking_is_running = False
         self.network_is_running = False
-
-        #self.ProcessQueue = SimpleQueue()
+        self.running_process_waring = {"mask": "Apply mask process already running!",
+                                       "network": "Find Plants is already running!"}
 
         self.detected = False
 
@@ -580,6 +580,12 @@ class GUI(QWidget):
         self.color_reference_text.setText(self.PS.identification_settings['ColorReference'])
 
     def reload_image(self):
+        if self.network_is_running or self.masking_is_running:
+            if self.masking_is_running: warningmsg = self.running_process_waring["mask"]
+            if self.network_is_running: warningmsg = self.running_process_waring["network"]
+            QMessageBox.question(self, '', warningmsg,
+                                 QMessageBox.Ok, QMessageBox.Ok)
+            return None
         if hasattr(self.PL, "image"):
             self.read_image(self._prev_filename)
             self.__onload_image(self.PL.image)
@@ -598,6 +604,8 @@ class GUI(QWidget):
                             QtGui.QImage.Format_RGB888)
         pixmap = QtGui.QPixmap.fromImage(qImg)
         self.imglabel.setPixmap(pixmap)
+        self.imglabel.repaint()
+        self.imglabel.update()
 
     @pyqtSlot()
     def openImage(self):
@@ -712,19 +720,21 @@ class GUI(QWidget):
         self.__onload_image(self.PL.image)
         self.masked = True
         self.masking_is_running = False
-    # def _mask_error(self, error):
-    #     exctype, value, errormsg = error
-    #     print(exctype)
-    #     print(value)
-    #     print(errormsg)
-    #     QMessageBox.about(self, "Error in Masking", str(value))
-    #     self.network_is_running = False
-    #     self.process_text.setText("Process failed!(Apply Mask)")
+    def _mask_error(self, error):
+        exctype, value, errormsg = error
+        print(exctype)
+        print(value)
+        print(errormsg)
+        QMessageBox.about(self, "Error in Masking", str(value))
+        self.network_is_running = False
+        self.process_text.setText("Process failed!(Apply Mask)")
     @pyqtSlot()
     def ImageMask(self):
         if hasattr(self.PL, "image"):
-            if self.masking_is_running:
-                QMessageBox.question(self, '', "Process already running!",
+            if self.masking_is_running or self.network_is_running:
+                if self.masking_is_running: warningmsg = self.running_process_waring["mask"]
+                if self.network_is_running: warningmsg = self.running_process_waring["network"]
+                QMessageBox.question(self, '', warningmsg,
                                 QMessageBox.Ok, QMessageBox.Ok)
                 return None
             if self.masked:
@@ -737,14 +747,14 @@ class GUI(QWidget):
                                  QMessageBox.Ok, QMessageBox.Ok)
             else:
                 self.masking_is_running = True
-                empty_signal = greenotyperAPI.GUI.PipelineRunner.WorkerSignals()
-                self._mask_process(empty_signal.progress)
-                self._mask_update()
-                #worker = greenotyperAPI.GUI.PipelineRunner.Worker(self._mask_process)
-                #self.threadpool.start(worker)
-                #worker.signals.progress.connect(self._write_progress)
-                #worker.signals.error.connect(self._mask_error)
-                #worker.signals.finished.connect(self._mask_update)
+                #empty_signal = greenotyperAPI.GUI.PipelineRunner.WorkerSignals()
+                #self._mask_process(empty_signal.progress)
+                #self._mask_update()
+                worker = greenotyperAPI.GUI.PipelineRunner.Worker(self._mask_process)
+                self.threadpool.start(worker)
+                worker.signals.progress.connect(self._write_progress)
+                worker.signals.error.connect(self._mask_error)
+                worker.signals.finished.connect(self._mask_update)
         else:
             QMessageBox.question(self, '', "No image is loaded",
                                  QMessageBox.Ok, QMessageBox.Ok)
@@ -770,31 +780,35 @@ class GUI(QWidget):
         progress_callback.emit("process complete! (Find Plants)")
         self.detected = True
         self.network_is_running = False
-    # def _network_error(self, error):
-    #     exctype, value, errormsg = error
-    #     print(exctype)
-    #     print(value)
-    #     print(errormsg)
-    #     QMessageBox.about(self, "Error in Filteration", str(value))
-    #     self.network_is_running = False
-    #     self.process_text.setText("Process failed!(Find Plants)")
+    def _network_error(self, error):
+        exctype, value, errormsg = error
+        print(exctype)
+        print(value)
+        print(errormsg)
+        QMessageBox.about(self, "Error in Filteration", str(value))
+        self.network_is_running = False
+        self.process_text.setText("Process failed!(Find Plants)")
     def _write_progress(self, value):
         self.process_text.setText(value)
     @pyqtSlot()
     def FindPlants(self):
         if hasattr(self.PL, "image"):
-            if self.network_is_running:
-                QMessageBox.question(self, '', "Find Plants is already running!",
+            if self.network_is_running or self.masking_is_running:
+                if self.masking_is_running: warningmsg = self.running_process_waring["mask"]
+                if self.network_is_running: warningmsg = self.running_process_waring["network"]
+                QMessageBox.question(self, '', warningmsg,
                                      QMessageBox.Ok, QMessageBox.Ok)
                 return None
             self.network_is_running = True
-            empty_signal = greenotyperAPI.GUI.PipelineRunner.WorkerSignals()
-            self._network_process(empty_signal.progress)
+            #empty_signal = greenotyperAPI.GUI.PipelineRunner.WorkerSignals()
+            #self._network_process(empty_signal.progress)
+            #self.imglabel.update()
+            #self.imglabel.repaint()
             ## Disabling MultiThreading due to refreashing issues in some versions of PyQt5
-            #worker = greenotyperAPI.GUI.PipelineRunner.Worker(self._network_process)
-            #worker.signals.error.connect(self._network_error)
-            #worker.signals.progress.connect(self._write_progress)
-            #self.threadpool.start(worker)
+            worker = greenotyperAPI.GUI.PipelineRunner.Worker(self._network_process)
+            worker.signals.error.connect(self._network_error)
+            worker.signals.progress.connect(self._write_progress)
+            self.threadpool.start(worker)
         else:
             QMessageBox.question(self, '', "No image is loaded",
                                  QMessageBox.Ok, QMessageBox.Ok)

@@ -160,6 +160,7 @@ class PipelineRunner(QWidget):
         self.LabelImgButton = QPushButton("LabelImg")
         #self.LabelImgButton.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         self.LabelImgButton.setMinimumWidth(170)
+        self.LabelImgButton.setDisabled(True)
         #self.LabelImgButton.clicked.connect(self.OpenLabelImg)
 
         self.other_apps = QVBoxLayout()
