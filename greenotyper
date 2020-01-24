@@ -119,8 +119,8 @@ if __name__=="__main__":
         else:
             if os.path.isdir(network_dir):
                 files = os.listdir(network_dir)
-                graph = os.path.join(network_dir,filter(lambda x: ".pb" in x and "txt" not in x, files)[0])
-                label = os.path.join(network_dir,filter(lambda x: ".pbtxt" in x, files)[0])
+                graph = os.path.join(network_dir,next(filter(lambda x: ".pb" in x and "txt" not in x, files)))
+                label = os.path.join(network_dir,next(filter(lambda x: ".pbtxt" in x, files)))
 
     if input_image is None:
         raise GREENOTYPER.ArgumentError("No input image provided. Use -i filename, or -h to see the help message")
