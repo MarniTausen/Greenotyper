@@ -481,8 +481,6 @@ class TestsPipelinePlanner(unittest.TestCase):
         self.mainwindow.GUI.setDefaultValues()
 
         self.mainwindow.GUI.FindPlants(multithread=False)
-        while self.mainwindow.GUI.network_is_running:
-            continue
         self.mainwindow.GUI.ImageMask(multithread=False)
 
         self.mainwindow.GUI.TestCrop()
