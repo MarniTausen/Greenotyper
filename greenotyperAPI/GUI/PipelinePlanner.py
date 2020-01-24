@@ -729,7 +729,7 @@ class GUI(QWidget):
         self.network_is_running = False
         self.process_text.setText("Process failed!(Apply Mask)")
     @pyqtSlot()
-    def ImageMask(self):
+    def ImageMask(self, multithread=True):
         if hasattr(self.PL, "image"):
             if self.masking_is_running or self.network_is_running:
                 if self.masking_is_running: warningmsg = self.running_process_waring["mask"]
@@ -747,14 +747,16 @@ class GUI(QWidget):
                                  QMessageBox.Ok, QMessageBox.Ok)
             else:
                 self.masking_is_running = True
-                #empty_signal = greenotyperAPI.GUI.PipelineRunner.WorkerSignals()
-                #self._mask_process(empty_signal.progress)
-                #self._mask_update()
-                worker = greenotyperAPI.GUI.PipelineRunner.Worker(self._mask_process)
-                self.threadpool.start(worker)
-                worker.signals.progress.connect(self._write_progress)
-                worker.signals.error.connect(self._mask_error)
-                worker.signals.finished.connect(self._mask_update)
+                if multithread:
+                    worker = greenotyperAPI.GUI.PipelineRunner.Worker(self._mask_process)
+                    self.threadpool.start(worker)
+                    worker.signals.progress.connect(self._write_progress)
+                    worker.signals.error.connect(self._mask_error)
+                    worker.signals.finished.connect(self._mask_update)
+                else:
+                    empty_signal = greenotyperAPI.GUI.PipelineRunner.WorkerSignals()
+                    self._mask_process(empty_signal.progress)
+                    self._mask_update()
         else:
             QMessageBox.question(self, '', "No image is loaded",
                                  QMessageBox.Ok, QMessageBox.Ok)
@@ -791,7 +793,7 @@ class GUI(QWidget):
     def _write_progress(self, value):
         self.process_text.setText(value)
     @pyqtSlot()
-    def FindPlants(self):
+    def FindPlants(self, multithread=True):
         if hasattr(self.PL, "image"):
             if self.network_is_running or self.masking_is_running:
                 if self.masking_is_running: warningmsg = self.running_process_waring["mask"]
@@ -800,15 +802,14 @@ class GUI(QWidget):
                                      QMessageBox.Ok, QMessageBox.Ok)
                 return None
             self.network_is_running = True
-            #empty_signal = greenotyperAPI.GUI.PipelineRunner.WorkerSignals()
-            #self._network_process(empty_signal.progress)
-            #self.imglabel.update()
-            #self.imglabel.repaint()
-            ## Disabling MultiThreading due to refreashing issues in some versions of PyQt5
-            worker = greenotyperAPI.GUI.PipelineRunner.Worker(self._network_process)
-            worker.signals.error.connect(self._network_error)
-            worker.signals.progress.connect(self._write_progress)
-            self.threadpool.start(worker)
+            if multithread:
+                worker = greenotyperAPI.GUI.PipelineRunner.Worker(self._network_process)
+                worker.signals.error.connect(self._network_error)
+                worker.signals.progress.connect(self._write_progress)
+                self.threadpool.start(worker)
+            else:
+                empty_signal = greenotyperAPI.GUI.PipelineRunner.WorkerSignals()
+                self._network_process(empty_signal.progress)
         else:
             QMessageBox.question(self, '', "No image is loaded",
                                  QMessageBox.Ok, QMessageBox.Ok)
