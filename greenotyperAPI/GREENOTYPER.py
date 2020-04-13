@@ -6,7 +6,8 @@ import os
 import tensorflow as tf
 #from matplotlib import pyplot as plt
 from skimage.color import hsv2rgb, rgb2hsv, lab2rgb, rgb2lab
-#from skimage import io
+from skimage.transform import resize
+from skimage import io
 from PIL import Image
 from skimage.draw import line
 from optparse import OptionParser
@@ -16,6 +17,10 @@ from multiprocessing import Pool
 import numpy as np
 import fcntl
 import errno
+
+## Unet imports
+from keras.models import load_model
+from keras import backend as K
 
 Image.MAX_IMAGE_PIXELS = None
 
@@ -90,7 +95,7 @@ class pipeline_settings:
 class Pipeline:
 
     def __get_version__(self):
-        self.__version__ = "0.6.0"
+        self.__version__ = "0.6.1.dev1"
         return self.__version__
 
     ## Initialization codes and file reading
@@ -249,7 +254,7 @@ class Pipeline:
         row_groups = self._permutate_rows(rows)
         group = self._most_likely_group(row_groups)
 
-        self.boxes["POT"] = group
+        self.boxes[self.PlantLabel] = group
     def _divide_into_rows(self, Pots, row_threshold):
         rows = []
         while len(Pots)>0:
@@ -418,6 +423,52 @@ class Pipeline:
     def HEXtoRGB(self, hexstring):
         hexstring = hexstring.split("#")[-1]
         return (int(hexstring[0:2], 16), int(hexstring[2:4], 16), int(hexstring[4:6], 16))
+
+    ## Unet segmentation functions
+    def load_unet(self, filename):
+        self.unet_model = load_model(filename, custom_objects={'recall_m': self.recall_m,
+                                                               'precision_m': self.precision_m})
+    def unet_predict(self, image_data):
+        if not hasattr(self, "unet_model"):
+            raise Exception("No Unet has been loaded")
+        predicted_masks = self.unet_model.predict(image_data, batch_size=1, verbose=1)
+        predicted_masks[predicted_masks>=0.5] = 1
+        predicted_masks[predicted_masks<0.5] = 0
+        self.predicted_masks = predicted_masks.astype(np.uint8)
+        for i in range(self.predicted_masks.shape[0]):
+            img = (np.copy(image_data[i])*255).astype(np.uint8)
+            mask = self.predicted_masks[i].reshape((512,512))
+            img[mask==0] = (0,0,0)
+            #print(self.predicted_masks[i].shape)
+            io.imsave("test_outputs/masks/{}.jpg".format(i), img)
+            print(self.predicted_masks[i].sum())
+    def unet_prepare_images(self, images):
+        n = len(images)
+        imagedata = np.ndarray((n, 512, 512, 3), dtype=np.float32)
+        for i in range(n):
+            imagedata[i] = images[i]/255
+        return imagedata
+    def collect_crop_data(self):
+        pots = self.boxes[self.PlantLabel]
+        images = np.ndarray((len(pots), 512, 512, 3), dtype=np.uint8)
+        for i, pot in enumerate(pots):
+            c = self._center(pot)
+            left, right, top, bottom = self._get_region_of_center(c, 256)
+            images[i] = np.copy(self.image[top:bottom, left:right])
+            io.imsave("test_outputs/crops/{}.jpg".format(i), images[i])
+        return images
+
+
+    def recall_m(self, y_true, y_pred):
+        true_positives = K.sum(K.round(K.clip(y_true * y_pred, 0, 1)))
+        possible_positives = K.sum(K.round(K.clip(y_true, 0, 1)))
+        recall = true_positives / (possible_positives + K.epsilon())
+        return recall
+    def precision_m(self, y_true, y_pred):
+        true_positives = K.sum(K.round(K.clip(y_true * y_pred, 0, 1)))
+        predicted_positives = K.sum(K.round(K.clip(y_pred, 0, 1)))
+        precision = true_positives / (predicted_positives + K.epsilon())
+        return precision
 
     def __circular_hsv(self, mini_img, mini_mask_0, plot=True):
         mini_hsv = rgb2hsv(mini_img)
@@ -790,6 +841,19 @@ class Pipeline:
             if self.measure_greenness[0]:
                 greenness_file.write_rows(greenness_rows)
                 greenness_file.close()
+    def scan_directory(self, directory):
+        items = os.listdir(directory)
+        files = []
+        for item in items:
+            if '.'==item[0]: continue
+            item_fp = os.path.join(directory, item)
+            if os.path.isfile(item_fp):
+                files.append(item_fp)
+            else:
+                internal_items = self.scan_directory(item_fp)
+                for in_item in internal_items:
+                    files.append(in_item)
+        return files
 
     class filelocking_csv_writer:
         def __init__(self, filename, sep=","):
@@ -896,6 +960,7 @@ class Pipeline:
                     row.append("NA")
             outfile.write_row(row)
             del unsorted_output[time_point]
+
 
     def greenness_output(self, filename, output_file):
         datafile = self.simple_csv_reader(filename)

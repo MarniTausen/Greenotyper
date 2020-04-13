@@ -68,6 +68,8 @@ if __name__=="__main__":
                       help="Open up the GREENOTYPER GUI.")
     parser.add_option('-o', '--organize', type="string", nargs=2, dest="OrganizeOutput",
                       help="Organize and clean the output. Usage: --organize=input_file output_file. \n If included only this action will be performed.")
+    parser.add_option('--unet', type="string", nargs=1, dest="UNET", default=None,
+                      help="Whether a UNET should be used to segment the plants.")
 
     options, args = parser.parse_args()
 
@@ -142,6 +144,23 @@ if __name__=="__main__":
     if options.by_day: output_settings.append((True, "Time"))
     elif options.by_sample: output_settings.append((True, "Sample"))
     else: output_settings.append((False, ""))
+
+    if not options.UNET is None:
+        Pipeline.load_unet(options.UNET)
+        Pipeline.open_image(input_image)
+        Pipeline.infer_network_on_image()
+        Pipeline.identify_group()
+        Pipeline.color_correction()
+
+        print(Pipeline.image.shape)
+
+        #Pipeline.draw_bounding_boxes()
+        #Pipeline.save_image("test.jpg")
+
+        crops = Pipeline.collect_crop_data()
+        imagedata = Pipeline.unet_prepare_images(crops)
+        Pipeline.unet_predict(imagedata)
+        sys.exit()
 
     arg_calls = []
     for input_image in input_images:
