@@ -1,4 +1,4 @@
-Greenotyper (v0.6.0)
+Greenotyper (v0.6.1)
 ================
 [![Build Status](https://api.travis-ci.com/MarniTausen/Greenotyper.svg?branch=master)](https://travis-ci.com/MarniTausen/Greenotyper)[![codecov](https://codecov.io/gh/MarniTausen/Greenotyper/branch/master/graph/badge.svg)](https://codecov.io/gh/MarniTausen/Greenotyper)[![PyPI version](https://badge.fury.io/py/greenotyper.svg)](https://badge.fury.io/py/greenotyper)
 
@@ -9,9 +9,9 @@ Greenotyper (v0.6.0)
 -   [Pipeline setup guide](#pipeline-setup-guide)
 -   [Neural net training](#neural-net-training)
 
-Greenotyper is a image analysis tool for large scale plant phenotyping experiments.
+Greenotyper is an image analysis tool for large scale plant phenotyping experiments.
 
-It uses google's object detection api ([github link](https://github.com/tensorflow/models/tree/master/research/object_detection)) to find the plants and thresholding to measure the size of the plants.
+It uses google's object detection api ([GitHub link](https://github.com/tensorflow/models/tree/master/research/object_detection)) to find the plants and thresholding to measure the size of the plants.
 
 Requirements
 ------------
@@ -22,15 +22,13 @@ Requirements
 - numpy v1.15.2 or higher
 - pillow v5.2.0 or higher
 - scikit-image v0.14.0 or higher
+- Keras v2 or higher
 
 Installation
 ------------
 
-There are precompiled graphical versions in the releases folder.
-
-**Currently there is only a Mac OS X version.** **There is no guarantee that the version works on versions less than 10.14.6**
-
 It is recommended to install the tool in a virtualenv or in an environment in conda. Example:
+
 ```bash
 conda create -n greenotyper_env python=3.7
 
@@ -39,10 +37,12 @@ conda activate greenotyper_env
 pip install greenotyper
 ```
 Install the latest version of greenotyper through pip:
+
 ```bash
 pip install greenotyper
 ```
 If there are problems with pip you can try calling pip3 instead:
+
 ```bash
 pip3 install greenotyper
 ```
@@ -56,7 +56,8 @@ not available yet
 General workflow guide
 ----------------------
 
-Starting a new workflow requires setting up and testing the pipeline. It starts by opening the pipeline planner. Either you open the Greenotyper app, or opening the GUI through the commandline interface:
+Starting a new workflow requires setting up and testing the pipeline. It starts by opening the pipeline planner. Either you open the Greenotyper app, or opening the GUI through the command line interface:
+
 ```bash
 greenotyper --GUI
 ```
@@ -65,11 +66,12 @@ To open the pipeline planner, click the Pipeline planner button.
 
 Testing the plant area detection, the network and pipeline settings are all done through the pipeline planner. For information on how use the interface go to the next section, and for general information on Pipeline setups click [here](#pipeline-setup-guide).
 
-Running the pipeline is done either through the commandline or through the GUI. The commandline is more efficient and can more easily be deployed on computing clusters.
+Running the pipeline is done either through the command line or through the GUI. The command line is more efficient and can more easily be deployed on computing clusters.
 
-The pipeline can be run on individual images or directories of images. The results are a single "database" file, which uses filelocking. (If your file system has blocked filelocking, then there is no guarantee the results will be correctly written when run using multi processing.)
+The pipeline can be run on individual images or directories of images. The results are a single "database" file, which uses file locking. (If your file system has blocked file locking, then there is no guarantee the results will be correctly written when run using multi processing.)
 
-To organise the results into a table you can use the commandline option:
+To organise the results into a table you can use the command line option:
+
 ```bash
 greenotyper -p mypipeline.pipeline -o input_file.csv output_file.csv
 ```
@@ -113,9 +115,11 @@ To test the detection of the plant area you can use apply mask function.
 Command line interface guide
 ----------------------------
 
-Command usage help message:
+Command line usage help message:
+
 ```
-=========== GREENOTYPER (v0.6.0) ===========
+Usage: 
+=========== GREENOTYPER (v0.6.1.dev3) ===========
 greenotyper -i image/directory -p settings.pipeline [options]
 
 Options:
@@ -145,13 +149,21 @@ Options:
                         output.
   --by_day              Subdividing the outputs based on per day. Recommended
                         to avoid file system overflow.
-  --by_individual       Subdividing the outputs based on per day. Recommended
-                        to avoid file system overflow.
+  --by_individual       Subdividing the outputs based on per individual.
+                        Recommended to avoid file system overflow.
   --GUI                 Open up the GREENOTYPER GUI.
   -o ORGANIZEOUTPUT, --organize=ORGANIZEOUTPUT
                         Organize and clean the output. Usage:
                         --organize=input_file output_file.   If included only
                         this action will be performed.
+  --unet=UNET           Whether a UNET should be used to segment the plants.
+                        Input: {unet.hdf5} {preprocess_dir}
+  --unet-preprocess=UNETPRE
+                        Preprocess crops for running in Unet. Provide a
+                        directory to output the preprocessing information.
+  --unet-postprocess=UNETPOST
+                        Postprocess the masks from Unet, and output results.
+                        Provide the {preprocess_dir}.
 ```
 
 Pipeline setup guide
@@ -159,3 +171,44 @@ Pipeline setup guide
 
 Neural net training
 -------------------
+
+### Object detection
+#### installation
+The object detection is done using the tensorflow object detection api, found on [GitHub here](https://github.com/tensorflow/models/tree/master/research/object_detection).
+
+The object detection api only works on tensorflow 1.x versions, and therefore should be trainined an enivorinment installed with the latest tensorflow 1.x version. It does not work with tensorflow 2+.
+
+Follow the whole install guide provided [here](https://github.com/tensorflow/models/blob/master/research/object_detection/g3doc/installation.md). If access to a GPU is available choose the tensorflow-gpu install over tensorflow. To be able use GPU, the [CUDA Toolkit](https://developer.nvidia.com/cuda-downloads) must be installed. Depending on the version of tensorflow installed, it depends on [different versions](https://www.tensorflow.org/install/source#tested_build_configurations). Supported tensorflow versions, 1.12.0, 1.13.0, 1.14.0 use different versions of CUDA. Version 1.12.0, depends on version 9 of CUDA, and versions 1.13.0 and 1.14.0 depend on version 10 of CUDA.
+
+#### Preparing training and testing data
+The training and testing data was created using the [labelImg tool](https://github.com/tzutalin/labelImg). The bounding boxes are manually drawn using labelImg, which outputs .xml files which describes the bounding boxes which have been drawn and the name of the class.
+
+The data has to be processed into into tha different format so that the object detection api can read and use the training and testing data.
+
+For this we created a simple script which converts the image + .xml files into .record files used by the object detection api. The scripts can be found [here](https://github.com/MarniTausen/Greenotyper/tree/master/training_data/object%20detection/create_tf_input.py).
+Usage of the script is as follows:
+
+```bash
+python create_tf_input.py inputdirectory -r output.record -l label_map.pbtxt
+```
+
+To produce the training data, the images with the xml files must be stored in a directory:
+
+```bash
+python create_tf_input.py traindirectory -r train.record -l label_map.pbtxt
+```
+
+The same for the testing data:
+
+```bash
+python create_tf_input.py testdirectory -r test.record -l label_map.pbtxt
+```
+
+Finally the [pipeline.config](https://github.com/MarniTausen/Greenotyper/blob/master/training_data/object%20detection/pipeline.config) file must be updated. Depending on what is being training, setting what the number of classes are being trained is important, and the number of steps the network is trained on. The full file locations of the training and testing (evaluation) data must be updated.
+
+#### Training
+
+
+
+### U-net
+
