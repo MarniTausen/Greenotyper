@@ -420,21 +420,48 @@ class TestOutputs(unittest.TestCase):
     def tearDown(self):
         del self.PL
 
-    def test_crop_and_label_pots_1_image_size(self):
+    def test_crop_and_label_pots_1_image_size_thresholding(self):
         self.PL.open_image("sample_data/Cam41/Cam41_MT20180616113420_C39_69.jpg")
         self.PL.infer_network_on_image()
         self.PL.measure_size = (True, "test_outputs")
+
+        # reset file
+        _file = open("test_outputs/database.size.csv", "w")
+        _file.write("")
+        _file.close()
 
         self.PL.crop_and_label_pots()
 
         self.PL.organize_output("test_outputs/database.size.csv", "test_outputs/sizes.csv")
 
-        self.assertTrue(True)
+        True_results = {"Time": "2018/06/16 - 11:34",
+                        "2171": "139537", "2172": "87218",
+                        "2173": "77495", "2174": "121252",
+                        "2175": "83682", "2191": "11011",
+                        "2192": "15083", "2193": "135098",
+                        "2194": "8888", "2195": "104438"}
+
+        _file = open("test_outputs/sizes.csv")
+        header = _file.readline().replace("\n","").split(",")
+        dataline = _file.readline().replace("\n","").split(",")
+        results = {}
+        #print(header)
+        #print(dataline)
+        for name, data in zip(header, dataline):
+            results[name] = data
+
+        for name in header:
+            self.assertEqual(results[name],True_results[name])
 
     def test_crop_and_label_pots_1_image_greenness(self):
         self.PL.open_image("sample_data/Cam41/Cam41_MT20180616113420_C39_69.jpg")
         self.PL.infer_network_on_image()
         self.PL.measure_greenness = (True, "test_outputs")
+
+        # reset file
+        _file = open("test_outputs/database.greenness.csv", "w")
+        _file.write("")
+        _file.close()
 
         self.PL.crop_and_label_pots()
 

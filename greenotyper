@@ -3,12 +3,44 @@
 from greenotyperAPI import *
 from optparse import OptionParser
 import os
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 import sys
 from multiprocessing import Pool
 import time
 import traceback
+#import tqdm
+import copy
+from math import ceil, floor
+import numpy as np
 
 def _run_process(arg_call):
+    PipelineSettings, input_image, output_settings = arg_call
+
+    Pipeline = GREENOTYPER.Pipeline()
+    Pipeline.load_pipeline(PipelineSettings)
+    Pipeline.measure_size = output_settings[0]
+    Pipeline.measure_greenness = output_settings[1]
+    Pipeline.mask_output = output_settings[2]
+    Pipeline.crop_output = output_settings[3]
+    Pipeline.substructure = output_settings[4]
+    Pipeline.unet_run = output_settings[5]
+
+    #sys.stderr.write("### STARTING PROCESS ###\n")
+
+    try:
+        Pipeline.open_image(input_image)
+        Pipeline.infer_network_on_image()
+        Pipeline.identify_group()
+        Pipeline.color_correction()
+
+        #Pipeline.read_camera_map("camera_map.csv")
+        #Pipeline.read_name_map("round1.csv")
+        Pipeline.crop_and_label_pots_old()
+    except Exception as e:
+        sys.stderr.write("### PROCESS FAILED! ###\n")
+        traceback.print_exc()
+
+def _run_image_prepare_process(arg_call):
     PipelineSettings, input_image, output_settings = arg_call
 
     Pipeline = GREENOTYPER.Pipeline()
@@ -19,8 +51,7 @@ def _run_process(arg_call):
     Pipeline.mask_output = output_settings[2]
     Pipeline.crop_output = output_settings[3]
     Pipeline.substructure = output_settings[4]
-
-    #sys.stderr.write("### STARTING PROCESS ###\n")
+    Pipeline.unet_run = output_settings[5]
 
     try:
         Pipeline.open_image(input_image)
@@ -28,12 +59,59 @@ def _run_process(arg_call):
         Pipeline.identify_group()
         Pipeline.color_correction()
 
-        Pipeline.read_camera_map("camera_map.csv")
-        Pipeline.read_name_map("round1.csv")
-        Pipeline.crop_and_label_pots()
+        crops = Pipeline.collect_crop_data(512)
+        if crops is None:
+            return None, None
+        imagedata = Pipeline.unet_prepare_images(crops)
+        filename_labels = Pipeline.get_filename_labels()
+
+        return imagedata, filename_labels
     except Exception as e:
         sys.stderr.write("### PROCESS FAILED! ###\n")
         traceback.print_exc()
+        return None, None
+
+def _output_unet_results_process(arg_calls):
+    PipelineSettings, output_settings, image_data_file, mask_data_file, filenames_list = arg_calls
+
+    print(image_data_file)
+
+    UnetPipeline = GREENOTYPER.Pipeline()
+    UnetPipeline.load_pipeline(PipelineSettings)
+    UnetPipeline.measure_size = copy.copy(output_settings[0])
+    UnetPipeline.measure_greenness = copy.copy(output_settings[1])
+    UnetPipeline.mask_output = copy.copy(output_settings[2])
+    UnetPipeline.crop_output = copy.copy(output_settings[3])
+    UnetPipeline.substructure = copy.copy(output_settings[4])
+    UnetPipeline.unet_run = copy.copy(output_settings[5])
+
+    try:
+        images = np.load(image_data_file)
+        predicted_masks = np.load(mask_data_file)
+
+        filenames = read_filenames(filenames_list)
+
+        UnetPipeline.unet_output_data(images, predicted_masks, filenames)
+
+        #del UnetPipeline
+    except Exception as e:
+        sys.stderr.write("### PROCESS FAILED! ###\n")
+        traceback.print_exc()
+
+def save_filenames(filename, filenames_list):
+    _file = open(filename, "w")
+    for name in filenames_list:
+        _file.write(name)
+        _file.write("\n")
+    _file.close()
+
+def read_filenames(filename):
+    _file = open(filename)
+    filenames = []
+    for line in _file:
+        filenames.append(line.strip())
+    return filenames
+
 
 if __name__=="__main__":
     Pipeline = GREENOTYPER.Pipeline()
@@ -63,13 +141,17 @@ if __name__=="__main__":
     parser.add_option('--by_day', action="store_true", dest="by_day",
                       help="Subdividing the outputs based on per day. Recommended to avoid file system overflow.")
     parser.add_option('--by_individual', action="store_true", dest="by_sample",
-                      help="Subdividing the outputs based on per day. Recommended to avoid file system overflow.")
+                      help="Subdividing the outputs based on per individual. Recommended to avoid file system overflow.")
     parser.add_option('--GUI', action="store_true", dest="gui",
                       help="Open up the GREENOTYPER GUI.")
     parser.add_option('-o', '--organize', type="string", nargs=2, dest="OrganizeOutput",
                       help="Organize and clean the output. Usage: --organize=input_file output_file. \n If included only this action will be performed.")
-    parser.add_option('--unet', type="string", nargs=1, dest="UNET", default=None,
-                      help="Whether a UNET should be used to segment the plants.")
+    parser.add_option('--unet', type="string", nargs=2, dest="UNET", default=None,
+                      help="Whether a UNET should be used to segment the plants. Input: {unet.hdf5} {preprocess_dir}")
+    parser.add_option('--unet-preprocess', type="string", nargs=1, dest="UNETPre",
+                      default=None, help="Preprocess crops for running in Unet. Provide a directory to output the preprocessing information.")
+    parser.add_option('--unet-postprocess', type="string", nargs=1, dest="UNETPost",
+                      default=None, help="Postprocess the masks from Unet, and output results. Provide the {preprocess_dir}.")
 
     options, args = parser.parse_args()
 
@@ -144,39 +226,133 @@ if __name__=="__main__":
     if options.by_day: output_settings.append((True, "Time"))
     elif options.by_sample: output_settings.append((True, "Sample"))
     else: output_settings.append((False, ""))
-
-    if not options.UNET is None:
-        Pipeline.load_unet(options.UNET)
-        Pipeline.open_image(input_image)
-        Pipeline.infer_network_on_image()
-        Pipeline.identify_group()
-        Pipeline.color_correction()
-
-        print(Pipeline.image.shape)
-
-        #Pipeline.draw_bounding_boxes()
-        #Pipeline.save_image("test.jpg")
-
-        crops = Pipeline.collect_crop_data()
-        imagedata = Pipeline.unet_prepare_images(crops)
-        Pipeline.unet_predict(imagedata)
-        sys.exit()
+    if options.UNET is None:
+        output_settings.append((False, ""))
+    else:
+        output_settings.append((True, options.UNET[0]))
 
     arg_calls = []
     for input_image in input_images:
         arg_calls.append((PipelineSettings, input_image, output_settings))
 
-    pool = Pool(processes=threads)
 
-    rs = pool.map_async(_run_process, arg_calls)
-    pool.close()
-    while True:
-        if rs.ready(): break
-        remaining = rs._number_left
-        print("Images left to process {}".format(remaining))
-        time.sleep(5)
+    if options.UNET is None and options.UNETPre is None and options.UNETPost is None:
+        pool = Pool(processes=threads)
+        mapped_values = list(tqdm.tqdm(pool.imap_unordered(_run_process, arg_calls), total=len(arg_calls)))
 
-    #for i, _ in enumerate(pool.map(_run_process, arg_calls)):
-    #    sys.stderr.write("\rdone {0:%}".format(i/len(input_images)))
-    #pool.terminate()
-    #pool.join()
+    if options.UNETPre:
+        preprocess_directory = options.UNETPre
+        input_name = options.image.split("/")[-1]
+
+        output_dir = os.path.join(preprocess_directory, input_name)
+
+        if not os.path.isdir(output_dir):
+            os.mkdir(output_dir)
+
+        batch_size = 10
+        batches = ceil(len(arg_calls)/batch_size)
+        for i in range(batches):
+            pool = Pool(processes=threads)
+            print("STARTING BATCH {} out of {}".format(i+1, batches))
+            print("\tRUNNING OBJECT DETECTION")
+            image_data = pool.map(_run_image_prepare_process, arg_calls[i*batch_size:(i+1)*batch_size])
+
+            pool.close()
+            pool.terminate()
+            pool.join()
+
+            if image_data is None: continue
+            image_data, filenames_list = Pipeline.unet_join_image_data(image_data)
+
+            if image_data is None: continue
+
+            np.save("{}/batch{}.npy".format(output_dir, i), image_data)
+            save_filenames("{}/batch{}.names".format(output_dir, i), filenames_list)
+
+            del image_data
+
+        sys.exit()
+
+    if options.UNET:
+        UnetPipeline = GREENOTYPER.Pipeline()
+        UnetPipeline.load_pipeline(PipelineSettings)
+        UnetPipeline.measure_size = output_settings[0]
+        UnetPipeline.measure_greenness = output_settings[1]
+        UnetPipeline.mask_output = output_settings[2]
+        UnetPipeline.crop_output = output_settings[3]
+        UnetPipeline.substructure = output_settings[4]
+        UnetPipeline.unet_run = output_settings[5]
+
+        unet_file, preprocess_dir = options.UNET
+
+        UnetPipeline.load_unet(unet_file)
+
+        batch_names = set()
+        for files in os.listdir(preprocess_dir):
+            batch_names.add(files.split(".")[0])
+
+        unet_calls = []
+        for batch in batch_names:
+            print(batch)
+            image_data_file = os.path.join(preprocess_dir,batch+".npy")
+            output_filename = os.path.join(preprocess_dir,batch+".mask.npy")
+
+            images = np.load(image_data_file)
+            predicted_masks = UnetPipeline.unet_apply_on_images(images)
+            np.save(output_filename, predicted_masks)
+
+    if options.UNETPost:
+        pool = Pool(processes=threads)
+
+        preprocess_dir = options.UNETPost
+
+        batch_names = set()
+        for files in os.listdir(preprocess_dir):
+            batch_names.add(files.split(".")[0])
+
+        arg_calls = []
+        for batch in batch_names:
+            arg_calls.append((PipelineSettings, output_settings,
+                               os.path.join(preprocess_dir,batch+".npy"),
+                               os.path.join(preprocess_dir,batch+".mask.npy"),
+                               os.path.join(preprocess_dir,batch+".names")))
+
+        pool.map(_output_unet_results_process, arg_calls)
+
+        pool.close()
+        pool.terminate()
+        pool.join()
+
+            #pool = Pool(processes=floor(threads/2))
+
+            #unet_calls = []
+            #run_size = ceil(len(image_data)/floor(threads/2))
+            #for i in range(floor(threads/2)):
+            #    unet_calls.append((PipelineSettings, output_settings, image_data[(i*run_size):((i+1)*run_size)]))
+
+            #pool = Pool(processes=1)
+
+            #unet_calls = []
+            #run_size = ceil(len(image_data)/1)
+            #for i in range(1):
+            #    unet_calls.append((PipelineSettings, output_settings, image_data[(i*run_size):((i+1)*run_size)]))
+
+            #print("\tRUNNING SEGMENTATION (U-net)")
+            #pool.map(_apply_unet_process, unet_calls)
+            #UnetPipeline.unet_apply_on_data(image_data)
+
+            #pool.close()
+            #pool.terminate()
+            #pool.join()
+
+            #image_data.clear()
+            #del image_data
+
+
+    #rs = pool.map_async(_run_process, arg_calls)
+    #pool.close()
+    #while True:
+    #    if rs.ready(): break
+    #    remaining = rs._number_left
+    #    print("Images left to process {}".format(remaining))
+    #    time.sleep(5)

@@ -4,6 +4,7 @@ import numpy as np
 import sys
 import os
 import tensorflow as tf
+#tf.get_logger().setLevel('INFO')
 #from matplotlib import pyplot as plt
 from skimage.color import hsv2rgb, rgb2hsv, lab2rgb, rgb2lab
 from skimage.transform import resize
@@ -95,7 +96,7 @@ class pipeline_settings:
 class Pipeline:
 
     def __get_version__(self):
-        self.__version__ = "0.6.1.dev1"
+        self.__version__ = "0.6.1.dev3"
         return self.__version__
 
     ## Initialization codes and file reading
@@ -117,6 +118,7 @@ class Pipeline:
         self.mask_output = (False, "")
         self.crop_output = (False, "")
         self.substructure = (False, "")
+        self.unet_run = (False, "")
     def load_pipeline(self, pipeline):
         self.pipeline_settings = pipeline
         self.HSV = pipeline.mask_settings['HSV']
@@ -223,6 +225,7 @@ class Pipeline:
         Applies the loaded graph on loaded image.
         The inferred bounding boxes in self.boxes
         '''
+        # config=tf.compat.v1.ConfigProto(device_count={'GPU': 0}) ## Disable gpu if running on a gpu
         with self.detection_graph.as_default():
             with tf.compat.v1.Session(graph=self.detection_graph) as sess:
                 image_tensor = self.detection_graph.get_tensor_by_name('image_tensor:0')
@@ -383,11 +386,11 @@ class Pipeline:
     def _base_mask(self, converter, c1, c2, c3, img=None):
         if img is None: img = self.image
         Nimg = converter(img)
-        r = np.full(Nimg.shape[:2], 1, dtype=int)
+        r = np.zeros(Nimg.shape[:2], dtype=int)
         minv, maxv = [c1[0], c2[0], c3[0]], [c1[1], c2[1], c3[1]]
         tmask = (Nimg>=minv)==(Nimg<=maxv)
         tmask = tmask.sum(2)==3
-        r[tmask] = 0
+        r[tmask] = 1
         return r
     def HSVmask(self, img=None, hue=None, sat=None, val=None):
         if hue is None: hue = self.HSV['hue']
@@ -401,28 +404,57 @@ class Pipeline:
         return self._base_mask(rgb2lab, L, a, b, img)
     def combinemasks(self, mask1, mask2):
         combined = mask1+mask2
-        combined[combined>255] = 255
+        combined[combined<2] = 0
+        combined[combined==2] = 1
         return combined
-    def mask_image(self):
+    def mask_image(self, img=None, outputmask=False):
         HSV, LAB = None, None
-        if self.HSV['enabled']: HSV = self.HSVmask()
-        if self.LAB['enabled']: LAB = self.LABmask()
+        if self.HSV['enabled']: HSV = self.HSVmask(img)
+        if self.LAB['enabled']: LAB = self.LABmask(img)
         if HSV is None:
-            self._mask = LAB
+            if outputmask:
+                return LAB
+            else:
+                self._mask = LAB
         elif LAB is None:
-            self._mask = HSV
+            if outputmask:
+                return HSV
+            else:
+                self._mask = HSV
         else:
-            self._mask = self.combinemasks(HSV, LAB)
+            if outputmask:
+                return self.combinemasks(HSV, LAB)
+            else:
+                self._mask = self.combinemasks(HSV, LAB)
     def fancy_overlay(self, changes=(55, -25, -25)):
         joined = self.image + changes
-        self.image[self._mask==0] = joined[self._mask==0]
+        self.image[self._mask==1] = joined[self._mask==1]
     def inverse_mask(self):
-        self.image[self._mask!=0] = (0, 0, 0)
+        self.image[self._mask==0] = (0, 0, 0)
     def basic_mask(self, color=(0,0,0)):
-        self.image[self._mask==0] = color
+        self.image[self._mask==1] = color
     def HEXtoRGB(self, hexstring):
         hexstring = hexstring.split("#")[-1]
         return (int(hexstring[0:2], 16), int(hexstring[2:4], 16), int(hexstring[4:6], 16))
+    def apply_masks_to_crops(self, crops):
+        cshape = crops.shape
+        n = cshape[0]
+        self.predicted_masks = np.ndarray(cshape[:3])
+        for i in range(n):
+            mini_img = np.copy(crops[i])
+            mini_hsv, mini_lab = None, None
+            if self.HSV['enabled']: mini_hsv = self.HSVmask(img = mini_img)
+            if self.LAB['enabled']: mini_lab = self.LABmask(img = mini_img)
+            if mini_hsv is None:
+                mini_mask = mini_lab
+            elif mini_lab is None:
+                mini_mask = mini_hsv
+            else:
+                mini_mask = self.combinemasks(mini_hsv, mini_lab)
+
+            self.predicted_masks[i] = mini_mask
+
+            #self.predicted_masks[i] = self.mask_image(img=np.copy(crops[i]))
 
     ## Unet segmentation functions
     def load_unet(self, filename):
@@ -431,33 +463,90 @@ class Pipeline:
     def unet_predict(self, image_data):
         if not hasattr(self, "unet_model"):
             raise Exception("No Unet has been loaded")
-        predicted_masks = self.unet_model.predict(image_data, batch_size=1, verbose=1)
+        predicted_masks = self.unet_model.predict(image_data, batch_size=1, verbose=1, workers=1)
         predicted_masks[predicted_masks>=0.5] = 1
         predicted_masks[predicted_masks<0.5] = 0
-        self.predicted_masks = predicted_masks.astype(np.uint8)
-        for i in range(self.predicted_masks.shape[0]):
-            img = (np.copy(image_data[i])*255).astype(np.uint8)
-            mask = self.predicted_masks[i].reshape((512,512))
-            img[mask==0] = (0,0,0)
-            #print(self.predicted_masks[i].shape)
-            io.imsave("test_outputs/masks/{}.jpg".format(i), img)
-            print(self.predicted_masks[i].sum())
+        return predicted_masks.astype(np.uint8)
     def unet_prepare_images(self, images):
         n = len(images)
         imagedata = np.ndarray((n, 512, 512, 3), dtype=np.float32)
         for i in range(n):
             imagedata[i] = images[i]/255
         return imagedata
-    def collect_crop_data(self):
+    def unet_apply_on_images(self, images):
+        #images, filenames = self.unet_join_image_data(image_data)
+
+        print("Applying U-net to: {} images".format(images.shape[0]))
+        #print(filenames)
+
+        predicted_masks = self.unet_predict(images)
+
+        print("Done Applying U-net to: {} images".format(predicted_masks.shape[0]))
+
+        return predicted_masks
+    def unet_output_data(self, images, predicted_masks, filenames):
+        if self.measure_size[0]:
+            growth_file = self.filelocking_csv_writer(os.path.join(self.measure_size[1],"database.size.csv"))
+            #growth_file.init_header(["Name", "Time", "Size"])
+            growth_rows = []
+        if self.measure_greenness[0]:
+            greenness_file = self.filelocking_csv_writer(os.path.join(self.measure_greenness[1],"database.greenness.csv"))
+            #greenness_file.init_header(["Name", "Time", "MeanHue", "VarinaceHue", "Size"])
+            greenness_rows = []
+
+        for i, output_name in enumerate(filenames):
+            name = output_name.split("/")[-1].split("_")[0]
+            timestamp = output_name.split("_")[-1]
+            mini_img = (images[i]*255).astype(np.uint8)
+            mini_mask = predicted_masks[i].reshape((512,512))
+
+            if self.measure_size[0]:
+                size = str(int(mini_mask.sum()))
+                growth_rows.append([name, timestamp, size])
+            if self.measure_greenness[0]:
+                if mini_mask.sum()>(512*512)*0.02 :
+                    mean_degree, var_degree, n, plot_image = self.__circular_hsv(mini_img, mini_mask, plot=False)
+                    greenness_rows.append([name, timestamp, str(mean_degree), str(var_degree), str(n)])
+                else:
+                    greenness_rows.append([name, timestamp, "NaN"])
+
+            if self.mask_output[0]:
+                crop_img = np.copy(mini_img)
+                crop_img[mini_mask==0] = (0,0,0)
+                Image.fromarray(crop_img).save(os.path.join(self.mask_output[1],output_name+"mask.jpg"), "JPEG")
+
+            if self.crop_output[0]:
+                Image.fromarray(mini_img).save(os.path.join(self.crop_output[1],output_name+".jpg"), "JPEG")
+
+        if self.measure_size[0]:
+            growth_file.write_rows(growth_rows)
+            growth_file.close()
+        if self.measure_greenness[0]:
+            greenness_file.write_rows(greenness_rows)
+            greenness_file.close()
+
+    def unet_join_image_data(self, image_data):
+        images_list = []
+        filenames_list = []
+        if image_data is None: return None, None
+        for images, filenames in image_data:
+            if images is None: continue
+            images_list.append(images)
+            filenames_list += filenames
+        if len(images_list)==0: return None, None
+        return np.concatenate(images_list), filenames_list
+    def collect_crop_data(self, dim):
         pots = self.boxes[self.PlantLabel]
-        images = np.ndarray((len(pots), 512, 512, 3), dtype=np.uint8)
+        if len(pots)<(self.nrow*self.ncol):
+            return None
+        images = np.ndarray((len(pots), dim, dim, 3), dtype=np.uint8)
         for i, pot in enumerate(pots):
             c = self._center(pot)
-            left, right, top, bottom = self._get_region_of_center(c, 256)
+            #left, right, top, bottom = self.__get_region_of_center(c, int(dim/2))
+            left, right, top, bottom = self.__get_border_aware_region(c, int(dim/2))
             images[i] = np.copy(self.image[top:bottom, left:right])
-            io.imsave("test_outputs/crops/{}.jpg".format(i), images[i])
+            #io.imsave("test_outputs/crops/{}.jpg".format(i), images[i])
         return images
-
 
     def recall_m(self, y_true, y_pred):
         true_positives = K.sum(K.round(K.clip(y_true * y_pred, 0, 1)))
@@ -470,9 +559,20 @@ class Pipeline:
         precision = true_positives / (predicted_positives + K.epsilon())
         return precision
 
-    def __circular_hsv(self, mini_img, mini_mask_0, plot=True):
+    def __circular_hsv(self, mini_img, mini_mask, plot=True):
+        mini_img[mini_mask==0] = (0,0,0)
+        mini_hsv, mini_lab = None, None
+        if self.HSV['enabled']: mini_hsv = self.HSVmask(img = mini_img)
+        if self.LAB['enabled']: mini_lab = self.LABmask(img = mini_img)
+        if mini_hsv is None:
+            mini_mask = mini_lab
+        elif mini_lab is None:
+            mini_mask = mini_hsv
+        else:
+            mini_mask = self.combinemasks(mini_hsv, mini_lab)
+
         mini_hsv = rgb2hsv(mini_img)
-        mini_h = mini_hsv[mini_mask_0, 0]*360
+        mini_h = mini_hsv[mini_mask==1, 0]*360
         mean_degree = mini_h.mean()
         var_degree = mini_h.var()
         n = len(mini_h)
@@ -514,6 +614,22 @@ class Pipeline:
         return mean_degree, var_degree, n, plot_image
     def _get_region_of_center(self, center, dim):
         return center[0]-dim, center[0]+dim, center[1]-dim, center[1]+dim
+    def __get_border_aware_region(self, center, dim):
+        left, right = center[0]-dim, center[0]+dim
+        top, bottom = center[1]-dim, center[1]+dim
+        if left<0:
+            right += abs(0-left)
+            left = 0
+        if right>self.width:
+            left -= abs(self.width-right)
+            right = self.width
+        if top<0:
+            bottom += abs(0-top)
+            top = 0
+        if bottom>self.height:
+            top -= abs(self.height-bottom)
+            bottom = self.height
+        return left, right, top, bottom
 
     ## COLOR CORRECTION
     def color_correction(self):
@@ -521,6 +637,8 @@ class Pipeline:
             if self.ColorReference not in self.boxes:
                 raise Exception("Missing color reference class (No detected object of class {})".format(self.ColorReference))
             identify_codes = self.boxes.get(self.ColorReference, [])
+
+            if len(identify_codes)==0: return None
 
             left, right, top, bottom = identify_codes[0]
 
@@ -728,7 +846,42 @@ class Pipeline:
         if self.crop_output[0]: active_dirs.append(self.crop_output[1])
         #if self.measure_greenness[0]: active_dirs.append(self.measure_greenness[1])
         return active_dirs
-    def crop_and_label_pots(self, return_crop_list=False):
+    def get_filename_labels(self):
+        camera, time_base, timestamp = self._get_camera_id_and_time_stamp()
+
+        time_dir = self._format_time(time_base, "%YY%mM%dD")
+
+        NS = self.camera_map[camera]['NS']
+        EW = self.camera_map[camera]['EW']
+        orient = self.camera_map[camera]['orient']
+
+        labels = self._get_pot_labels(NS, EW, orient)
+
+        filename_labels = []
+        for label in labels:
+            name = self.name_map[label[0]][label[1]]
+
+            if self.substructure[0]:
+                if self.substructure[1]=="Sample":
+                    for active_dir in self._get_active_dirs():
+                        new_dir = os.path.join(active_dir, name)
+                        if not os.path.isdir(new_dir):
+                            os.mkdir(new_dir)
+                    base_dir = name
+                if self.substructure[1]=="Time":
+                    for active_dir in self._get_active_dirs():
+                        new_dir = os.path.join(active_dir, time_dir)
+                        #print(new_dir)
+                        if not os.path.isdir(new_dir):
+                            os.mkdir(new_dir)
+                    base_dir = time_dir
+            else:
+                base_dir = ""
+
+            filename_labels.append(os.path.join(base_dir, name+"_"+time_base))
+
+        return filename_labels
+    def crop_and_label_pots_old(self, return_crop_list=False):
         if not hasattr(self, "camera_map"):
             raise Exception("No camera map has been loaded! Unable to label objects")
         if not hasattr(self, "name_map"):
@@ -802,18 +955,19 @@ class Pipeline:
                     mini_mask = mini_hsv
                 else:
                     mini_mask = self.combinemasks(mini_hsv, mini_lab)
-                mini_mask_0 = mini_mask==0
+                #mini_mask_0 = mini_mask==0
 
                 if self.measure_size[0]:
-                    blackpixels = np.where(mini_mask_0)
-                    blackpixels = np.array(blackpixels)
-                    size = str(blackpixels.shape[1])
+                    #blackpixels = np.where(mini_mask_0)
+                    #blackpixels = np.array(blackpixels)
+                    #size = str(blackpixels.shape[1])
+                    size = str(int(mini_mask.sum()))
 
                     growth_rows.append([name, timestamp, size])
 
                 if self.measure_greenness[0]:
-                    if mini_mask_0.sum()>(self.dim*self.dim)*0.05:
-                        mean_degree, var_degree, n, plot_image = self.__circular_hsv(mini_img, mini_mask_0, plot=False)
+                    if mini_mask.sum()>(self.dim*self.dim)*0.05:
+                        mean_degree, var_degree, n, plot_image = self.__circular_hsv(mini_img, mini_mask, plot=False)
 
                         greenness_rows.append([name, timestamp, str(mean_degree), str(var_degree), str(n)])
 
@@ -821,13 +975,121 @@ class Pipeline:
                         greenness_rows.append([name, timestamp, "NaN"])
 
                 if self.mask_output[0]:
-                    mini_img[~mini_mask_0] = (0,0,0)
+                    mini_img[mini_mask==0] = (0,0,0)
                     Image.fromarray(mini_img).save(os.path.join(self.mask_output[1],output_name+"mask.jpg"), "JPEG")
                     #io.imsave(os.path.join(self.mask_output[1],output_name+"mask.jpg"),
                     #          mini_img)
 
                 if self.crop_output[0]:
                     Image.fromarray(self.image[top:bottom, left:right]).save(os.path.join(self.crop_output[1],output_name+".jpg"), "JPEG")
+                    #io.imsave(os.path.join(self.crop_output[1],output_name+".jpg"),
+                    #          self.image[top:bottom, left:right])
+
+
+        if return_crop_list:
+            return crop_list, sample_list
+        else:
+            if self.measure_size[0]:
+                growth_file.write_rows(growth_rows)
+                growth_file.close()
+            if self.measure_greenness[0]:
+                greenness_file.write_rows(greenness_rows)
+                greenness_file.close()
+    def crop_and_label_pots(self, return_crop_list=False):
+        if not hasattr(self, "camera_map"):
+            raise Exception("No camera map has been loaded! Unable to label objects")
+        if not hasattr(self, "name_map"):
+            raise Exception("No name map has been loaded! Unable to label objects")
+        if self.PlantLabel not in self.boxes:
+            raise Exception("No plants available to label")
+        if len(self.boxes[self.PlantLabel])!=(self.nrow*self.ncol):
+            print("WARNING: Missing plants! Skipping this step.")
+            return None
+
+        camera, time_base, timestamp = self._get_camera_id_and_time_stamp()
+
+        time_dir = self._format_time(time_base, "%YY%mM%dD")
+
+        NS = self.camera_map[camera]['NS']
+        EW = self.camera_map[camera]['EW']
+        orient = self.camera_map[camera]['orient']
+
+        labels = self._get_pot_labels(NS, EW, orient)
+
+        pots = self.boxes[self.PlantLabel]
+
+        if self.unet_run[0]:
+            self.dim = 512
+            crops = self.collect_crop_data(self.dim)
+            self.load_unet(self.unet_run[1])
+            imagedata = self.unet_prepare_images(crops)
+            self.unet_predict(imagedata)
+        else:
+            crops = self.collect_crop_data(self.dim)
+            self.apply_masks_to_crops(crops)
+
+        if return_crop_list:
+            crop_list = []
+            sample_list = []
+        else:
+            if self.measure_size[0]:
+                growth_file = self.filelocking_csv_writer(os.path.join(self.measure_size[1],"database.size.csv"))
+            if self.measure_greenness[0]:
+                greenness_file = self.filelocking_csv_writer(os.path.join(self.measure_greenness[1],"database.greenness.csv"))
+
+            growth_rows = []
+            greenness_rows = []
+
+        for i, label in enumerate(labels):
+            name = self.name_map[label[0]][label[1]]
+
+            if self.substructure[0]:
+                if self.substructure[1]=="Sample":
+                    for active_dir in self._get_active_dirs():
+                        new_dir = os.path.join(active_dir, name)
+                        if not os.path.isdir(new_dir):
+                            os.mkdir(new_dir)
+                    base_dir = name
+                if self.substructure[1]=="Time":
+                    for active_dir in self._get_active_dirs():
+                        new_dir = os.path.join(active_dir, time_dir)
+                        #print(new_dir)
+                        if not os.path.isdir(new_dir):
+                            os.mkdir(new_dir)
+                    base_dir = time_dir
+            else:
+                base_dir = ""
+
+            output_name = os.path.join(base_dir, name+"_"+time_base)
+
+            if return_crop_list:
+                crop_list.append(np.copy(crops[i]))
+                sample_list.append([camera, timestamp, name])
+            else:
+                mini_img = crops[i]
+                mini_mask = self.predicted_masks[i].reshape((self.dim, self.dim))
+
+                if self.measure_size[0]:
+                    size = str(int(mini_mask.sum()))
+                    growth_rows.append([name, timestamp, size])
+
+                if self.measure_greenness[0]:
+                    if mini_mask.sum()>(self.dim*self.dim)*0.05:
+                        mean_degree, var_degree, n, plot_image = self.__circular_hsv(mini_img, mini_mask, plot=False)
+
+                        greenness_rows.append([name, timestamp, str(mean_degree), str(var_degree), str(n)])
+                    else:
+                        greenness_rows.append([name, timestamp, "NaN"])
+
+                if self.mask_output[0]:
+                    crop_img = np.copy(crops[i])
+                    crop_img[mini_mask==0] = (0,0,0)
+                    Image.fromarray(crop_img).save(os.path.join(self.mask_output[1],output_name+"mask.jpg"), "JPEG")
+                    #io.imsave(os.path.join(self.mask_output[1],output_name+"mask.jpg"),
+                    #          mini_img)
+
+                if self.crop_output[0]:
+                    Image.fromarray(crops[i]).save(os.path.join(self.crop_output[1],output_name+".jpg"), "JPEG")
                     #io.imsave(os.path.join(self.crop_output[1],output_name+".jpg"),
                     #          self.image[top:bottom, left:right])
 
@@ -880,8 +1142,8 @@ class Pipeline:
         def close(self):
             self._file.close()
     class csv_writer:
-        def __init__(self, filename, sep=","):
-            self._file = open(filename, "w")
+        def __init__(self, filename, sep=",", mode="a"):
+            self._file = open(filename, mode, buffering=1)
             self.rows = []
             self.sep = sep
         def init_header(self, header):
@@ -896,9 +1158,6 @@ class Pipeline:
                                                                                                           self.ncol)
             self.rows.append([str(col) for col in row])
         def write_row(self, row):
-            if len(row)!=self.ncol:
-                raise "Wrong dimension of row. Row has {} columns, while csv table has {} columns".format(len(row),
-                                                                                                          self.ncol)
             self._file.write(self.sep.join(row))
             self._file.write("\n")
         def write(self, sep=","):
@@ -940,12 +1199,13 @@ class Pipeline:
         for line in datafile:
             if len(line)!=3: continue
             name, time, measure = line
+            time = self.prettifyTime(time)
             if time not in unsorted_output:
                 unsorted_output[time] = {}
             unsorted_output[time][name] = measure
             samples.add(name)
         datafile.close()
-        outfile = self.csv_writer(output_file)
+        outfile = self.csv_writer(output_file, mode="w")
         time_series = sorted(unsorted_output.keys())
         samples = sorted(list(samples))
         outfile.init_header(["Time"]+samples)
@@ -961,7 +1221,6 @@ class Pipeline:
             outfile.write_row(row)
             del unsorted_output[time_point]
 
-
     def greenness_output(self, filename, output_file):
         datafile = self.simple_csv_reader(filename)
         base_stats = {}
@@ -969,6 +1228,7 @@ class Pipeline:
         for line in datafile:
             if len(line)!=5: continue
             name, time, mean, var, n = line
+            time = self.prettifyTime(time)
             if name not in base_stats:
                 base_stats[name] = {}
             base_stats[name][time] = {'mean': float(mean),
@@ -980,9 +1240,9 @@ class Pipeline:
         #print(times)
         #print(samples)
 
-        outfile_files = {'mean': self.csv_writer(output_file+".mean.csv"),
-                         'var': self.csv_writer(output_file+".var.csv"),
-                         'n': self.csv_writer(output_file+".n.csv")}
+        outfile_files = {'mean': self.csv_writer(output_file+".mean.csv", mode="w"),
+                         'var': self.csv_writer(output_file+".var.csv", mode="w"),
+                         'n': self.csv_writer(output_file+".n.csv", mode="w")}
         for name in outfile_files:
              outfile_files[name].init_header(["Time"]+samples)
              outfile_files[name].write_header()
