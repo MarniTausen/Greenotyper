@@ -176,9 +176,61 @@ Neural net training
 #### installation
 The object detection is done using the tensorflow object detection api, found on [GitHub here](https://github.com/tensorflow/models/tree/master/research/object_detection).
 
+This guide has been tested on commit up to: [8518d05](https://github.com/tensorflow/models/commit/8518d053936aaf30afb9ed0a4ea01baddca5bd17). Future versions might change and the following guide might not be relevant. To use the version that is known to work, you can open the commit, and click browse files and download the whole models repository from that commit.
+
 The object detection api only works on tensorflow 1.x versions, and therefore should be trainined an enivorinment installed with the latest tensorflow 1.x version. It does not work with tensorflow 2+.
 
-Follow the whole install guide provided [here](https://github.com/tensorflow/models/blob/master/research/object_detection/g3doc/installation.md). If access to a GPU is available choose the tensorflow-gpu install over tensorflow. To be able use GPU, the [CUDA Toolkit](https://developer.nvidia.com/cuda-downloads) must be installed. Depending on the version of tensorflow installed, it depends on [different versions](https://www.tensorflow.org/install/source#tested_build_configurations). Supported tensorflow versions, 1.12.0, 1.13.0, 1.14.0 use different versions of CUDA. Version 1.12.0, depends on version 9 of CUDA, and versions 1.13.0 and 1.14.0 depend on version 10 of CUDA.
+The whole install guide provided [here](https://github.com/tensorflow/models/blob/master/research/object_detection/g3doc/installation.md). If access to a GPU is available choose the tensorflow-gpu install over tensorflow. To be able use GPU, the [CUDA Toolkit](https://developer.nvidia.com/cuda-downloads) must be installed. Depending on the version of tensorflow installed, it depends on [different versions](https://www.tensorflow.org/install/source#tested_build_configurations). Supported tensorflow versions, 1.12.0, 1.13.0, 1.14.0 use different versions of CUDA. Version 1.12.0, depends on version 9 of CUDA, and versions 1.13.0 and 1.14.0 depend on version 10 of CUDA.
+
+Here is a version of installing that worked on a Mac OS X system:
+
+```bash
+conda create -n ObjectDetection python=3.6
+
+conda activate ObjectDetection
+
+pip install tensorflow==1.14
+```
+
+Versions 1.13 and 1.12 of tensorflow should also work. Install the tensorflow-gpu version if the intent is to train on a GPU.
+```bash
+pip install tensorflow-gpu==1.14
+```
+
+Pip install tensorflow gets nearly all of the dependencies listed on the guide. However the remaining dependencies were installed like this:
+
+```bash
+conda install protobuf
+
+pip install --user pycocotools
+```
+
+Next was retreiving the object detection API, by downloading the whole models repository. The API is dependent on other research packages in the repository. So start by cloning the latest version, or download this [commit](https://github.com/tensorflow/models/commit/8518d053936aaf30afb9ed0a4ea01baddca5bd17).
+
+```bash
+git clone https://github.com/tensorflow/models.git
+```
+
+Next is to "compile" some of the code from the api using the following command:
+
+```bash
+cd models/research/
+protoc object_detection/protos/*.proto --python_out=.
+```
+
+Next make API callable, by exporting the directory to the python path:
+
+```bash
+export PYTHONPATH=$PYTHONPATH:`pwd`:`pwd`/slim
+```
+
+Now you can test whether the API works by running the following command:
+
+```bash
+python object_detection/builders/model_builder_tf1_test.py
+```
+
+You should get OK on all of the tests at the end. If you use tensorflow 1.14 you will get a lot of warnings, due to the version preparing people to upgrade to version 2, but you can ignore these.
 
 #### Preparing training and testing data
 The training and testing data was created using the [labelImg tool](https://github.com/tzutalin/labelImg). The bounding boxes are manually drawn using labelImg, which outputs .xml files which describes the bounding boxes which have been drawn and the name of the class.
@@ -206,9 +258,11 @@ python create_tf_input.py testdirectory -r test.record -l label_map.pbtxt
 
 Finally the [pipeline.config](https://github.com/MarniTausen/Greenotyper/blob/master/training_data/object%20detection/pipeline.config) file must be updated. Depending on what is being training, setting what the number of classes are being trained is important, and the number of steps the network is trained on. The full file locations of the training and testing (evaluation) data must be updated.
 
-#### Training
+#### Training and Testing
 
+Training can now be run following the guide [here](https://github.com/tensorflow/models/blob/master/research/object_detection/g3doc/running_locally.md). Training and evaluation (testing) are run with the same command.
 
+To see the evaluation results you use tensorboard, which has been installed with tensorflow.
 
 ### U-net
 
