@@ -424,7 +424,7 @@ class TestOutputs(unittest.TestCase):
         self.PL.open_image("sample_data/Cam41/Cam41_MT20180616113420_C39_69.jpg")
         self.PL.infer_network_on_image()
         self.PL.measure_size = (True, "test_outputs")
-        self.PL.mask_output = (True, "test_outputs/masks")
+        #self.PL.mask_output = (True, "test_outputs/masks")
 
         # reset file
         _file = open("test_outputs/database.size.csv", "w")
