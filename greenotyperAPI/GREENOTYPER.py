@@ -96,7 +96,7 @@ class pipeline_settings:
 class Pipeline:
 
     def __get_version__(self):
-        self.__version__ = "0.6.1.dev3"
+        self.__version__ = "0.6.1.dev4"
         return self.__version__
 
     ## Initialization codes and file reading
@@ -439,7 +439,7 @@ class Pipeline:
     def apply_masks_to_crops(self, crops):
         cshape = crops.shape
         n = cshape[0]
-        self.predicted_masks = np.ndarray(cshape[:3])
+        predicted_masks = np.ndarray(cshape[:3])
         for i in range(n):
             mini_img = np.copy(crops[i])
             mini_hsv, mini_lab = None, None
@@ -452,9 +452,9 @@ class Pipeline:
             else:
                 mini_mask = self.combinemasks(mini_hsv, mini_lab)
 
-            self.predicted_masks[i] = mini_mask
+            predicted_masks[i] = mini_mask
 
-            #self.predicted_masks[i] = self.mask_image(img=np.copy(crops[i]))
+        return predicted_masks
 
     ## Unet segmentation functions
     def load_unet(self, filename):
@@ -1018,15 +1018,8 @@ class Pipeline:
 
         pots = self.boxes[self.PlantLabel]
 
-        if self.unet_run[0]:
-            self.dim = 512
-            crops = self.collect_crop_data(self.dim)
-            self.load_unet(self.unet_run[1])
-            imagedata = self.unet_prepare_images(crops)
-            self.unet_predict(imagedata)
-        else:
-            crops = self.collect_crop_data(self.dim)
-            self.apply_masks_to_crops(crops)
+        crops = self.collect_crop_data(self.dim*2)
+        predicted_masks = self.apply_masks_to_crops(crops)
 
         if return_crop_list:
             crop_list = []
@@ -1067,7 +1060,7 @@ class Pipeline:
                 sample_list.append([camera, timestamp, name])
             else:
                 mini_img = crops[i]
-                mini_mask = self.predicted_masks[i].reshape((self.dim, self.dim))
+                mini_mask = predicted_masks[i].reshape((self.dim*2, self.dim*2))
 
                 if self.measure_size[0]:
                     size = str(int(mini_mask.sum()))
@@ -1199,7 +1192,10 @@ class Pipeline:
         for line in datafile:
             if len(line)!=3: continue
             name, time, measure = line
-            time = self.prettifyTime(time)
+            try:
+                time = self.prettifyTime(time)
+            except:
+                pass
             if time not in unsorted_output:
                 unsorted_output[time] = {}
             unsorted_output[time][name] = measure
@@ -1228,7 +1224,10 @@ class Pipeline:
         for line in datafile:
             if len(line)!=5: continue
             name, time, mean, var, n = line
-            time = self.prettifyTime(time)
+            try:
+                time = self.prettifyTime(time)
+            except:
+                pass
             if name not in base_stats:
                 base_stats[name] = {}
             base_stats[name][time] = {'mean': float(mean),

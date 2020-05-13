@@ -264,5 +264,17 @@ Training can now be run following the guide [here](https://github.com/tensorflow
 
 To see the evaluation results you use tensorboard, which has been installed with tensorflow.
 
+To export the network you can use the following export_inference_graph.py
+
+```
+python export_inference_graph.py \
+    --input_type image_tensor \
+    --pipeline_config_path path/to/filename.config \
+    --trained_checkpoint_prefix path/to/model.ckpt \
+    --output_directory path/to/exported_model_directory
+```
+
+This function outputs the frozen\_inference\_graph.pd. Adding this file together with the label_map.pbtxt into a network directory creates the network input used in Greenotyper.
+
 ### U-net
 
