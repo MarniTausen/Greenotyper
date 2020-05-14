@@ -29,7 +29,6 @@ install:
   - python setup.py install
 script:
     - cat training_data/u-net/network/unetpart* > training_data/u-net/network/currentbest.unet.hdf5
-    - md5sum training_data/u-net/network/currentbest.unet.hdf5
     - xvfb-run -a pytest --cov=./
 after_success:
     - codecov

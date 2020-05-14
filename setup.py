@@ -5,10 +5,10 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="greenotyper",
-    version="0.6.0",
+    version="0.6.1.rc1",
     scripts=["greenotyper"],
     author="Marni Tausen",
-    author_email="Marni16ox@gmail.com",
+    author_email="marni.tausen@gmail.com",
     data_files=[('', ['icon/icon.png'])],
     description="Plant image-based phenotyping pipeline",
     long_description=long_description,
@@ -21,7 +21,8 @@ setuptools.setup(
         "PyQt5>=5.9",
         "numpy>=1.15",
         "scikit-image>=0.14",
-        "pillow>=5.2"
+        "pillow>=5.2",
+        "Keras>=2.3"
     ],
     classifiers=[
         "Programming Language :: Python :: 3.6",

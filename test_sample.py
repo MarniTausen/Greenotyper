@@ -423,8 +423,11 @@ class TestOutputs(unittest.TestCase):
     def test_crop_and_label_pots_1_image_size_thresholding(self):
         self.PL.open_image("sample_data/Cam41/Cam41_MT20180616113420_C39_69.jpg")
         self.PL.infer_network_on_image()
+        self.PL.identify_group()
+        self.PL.color_correction()
         self.PL.measure_size = (True, "test_outputs")
-        #self.PL.mask_output = (True, "test_outputs/masks")
+        self.PL.mask_output = (True, "test_outputs")
+        self.PL.crop_output = (True, "test_outputs")
 
         # reset file
         _file = open("test_outputs/database.size.csv", "w")
@@ -436,11 +439,11 @@ class TestOutputs(unittest.TestCase):
         self.PL.organize_output("test_outputs/database.size.csv", "test_outputs/sizes.csv")
 
         True_results = {"Time": "2018/06/16 - 11:34",
-                        "2171": "139537", "2172": "87218",
-                        "2173": "77495", "2174": "121252",
-                        "2175": "83682", "2191": "11011",
-                        "2192": "15083", "2193": "135098",
-                        "2194": "8888", "2195": "104438"}
+                        "2171": "142874", "2172": "11876",
+                        "2173": "146116", "2174": "80369",
+                        "2175": "91804", "2191": "16865",
+                        "2192": "128383", "2193": "9830",
+                        "2194": "109220", "2195": "87013"}
 
         _file = open("test_outputs/sizes.csv")
         header = _file.readline().replace("\n","").split(",")
@@ -457,6 +460,8 @@ class TestOutputs(unittest.TestCase):
     def test_crop_and_label_pots_1_image_greenness(self):
         self.PL.open_image("sample_data/Cam41/Cam41_MT20180616113420_C39_69.jpg")
         self.PL.infer_network_on_image()
+        self.PL.identify_group()
+        self.PL.color_correction()
         self.PL.measure_greenness = (True, "test_outputs")
 
         # reset file
@@ -516,6 +521,97 @@ class TestsPipelinePlanner(unittest.TestCase):
         self.assertTrue(True)
 
 
+class TestsUnet(unittest.TestCase):
+    def setUp(self):
+        PS = GREENOTYPER.pipeline_settings()
+        PS.read("sample_data/sample.pipeline")
+        self.PL = GREENOTYPER.Pipeline(pipeline=PS)
+        self.PL.open_image("sample_data/Cam41/Cam41_MT20180616113420_C39_69.jpg")
+        self.PL.infer_network_on_image()
+        self.PL.identify_group()
+        self.PL.color_correction()
 
-if __name__=='__main__':
-    unittest.main()
+    def tearDown(self):
+        del self.PL
+
+    def test_load_unet(self):
+        self.assertFalse(hasattr(self.PL, "unet_model"))
+
+        self.PL.load_unet("training_data/u-net/network/currentbest.unet.hdf5")
+
+        self.assertTrue(hasattr(self.PL, "unet_model"))
+
+    def test_unet_prepare_data(self):
+        crops = self.PL.collect_crop_data(512)
+        self.assertEqual(crops.shape[0], 10)
+        self.assertEqual(crops.shape[1], 512)
+        self.assertEqual(crops.shape[2], 512)
+        self.assertEqual(crops.shape[3], 3)
+
+        imagedata = self.PL.unet_prepare_images(crops)
+        self.assertEqual(imagedata.shape[0], 10)
+        self.assertEqual(imagedata.shape[1], 512)
+        self.assertEqual(imagedata.shape[2], 512)
+        self.assertEqual(imagedata.shape[3], 3)
+
+        for i in range(imagedata.shape[0]):
+            self.assertLessEqual(imagedata[i].max(), 1)
+
+        True_labels = ['2175_MT20180616113420', '2174_MT20180616113420',
+                       '2173_MT20180616113420', '2172_MT20180616113420',
+                       '2171_MT20180616113420', '2195_MT20180616113420',
+                       '2194_MT20180616113420', '2193_MT20180616113420',
+                       '2192_MT20180616113420', '2191_MT20180616113420']
+
+        filename_labels = self.PL.get_filename_labels()
+
+        for tlabel, clabel in zip(True_labels, filename_labels):
+            self.assertEqual(tlabel, clabel)
+
+    def test_unet_predict_and_output(self):
+        self.PL.measure_size = (True, "test_outputs/u-net")
+        self.PL.mask_output = (True, "test_outputs/u-net")
+        self.PL.crop_output = (True, "test_outputs/u-net")
+        self.PL.measure_greenness = (True, "test_outputs/u-net")
+
+        # reset files
+        _file = open("test_outputs/u-net/database.size.csv", "w")
+        _file.write("")
+        _file.close()
+        _file = open("test_outputs/u-net/database.greenness.csv", "w")
+        _file.write("")
+        _file.close()
+
+        self.PL.load_unet("training_data/u-net/network/currentbest.unet.hdf5")
+
+        crops = self.PL.collect_crop_data(512)
+        imagedata = self.PL.unet_prepare_images(crops)
+        filename_labels = self.PL.get_filename_labels()
+
+        predicted_masks = self.PL.unet_apply_on_images(imagedata)
+
+        self.PL.unet_output_data(imagedata, predicted_masks, filename_labels)
+
+        self.PL.organize_output("test_outputs/u-net/database.size.csv", "test_outputs/u-net/unet.sizes.csv")
+
+        True_results = {"Time": "2018/06/16 - 11:34",
+                        "2171": "151528", "2172": "13637",
+                        "2173": "151743", "2174": "86893",
+                        "2175": "100536", "2191": "18501",
+                        "2192": "138264", "2193": "10389",
+                        "2194": "113808", "2195": "89083"}
+
+        _file = open("test_outputs/u-net/unet.sizes.csv")
+        header = _file.readline().replace("\n","").split(",")
+        dataline = _file.readline().replace("\n","").split(",")
+        results = {}
+        #print(header)
+        #print(dataline)
+        for name, data in zip(header, dataline):
+            results[name] = data
+
+        for name in header:
+            self.assertEqual(results[name],True_results[name])
+
+
+        self.PL.greenness_output("test_outputs/u-net/database.greenness.csv", "test_outputs/u-net/unet.greenness")

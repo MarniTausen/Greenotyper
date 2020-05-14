@@ -96,7 +96,7 @@ class pipeline_settings:
 class Pipeline:
 
     def __get_version__(self):
-        self.__version__ = "0.6.1.dev4"
+        self.__version__ = "0.6.1.rc1"
         return self.__version__
 
     ## Initialization codes and file reading
@@ -119,6 +119,7 @@ class Pipeline:
         self.crop_output = (False, "")
         self.substructure = (False, "")
         self.unet_run = (False, "")
+        self.group_identified = False
     def load_pipeline(self, pipeline):
         self.pipeline_settings = pipeline
         self.HSV = pipeline.mask_settings['HSV']
@@ -258,6 +259,8 @@ class Pipeline:
         group = self._most_likely_group(row_groups)
 
         self.boxes[self.PlantLabel] = group
+
+        self.group_identified = True
     def _divide_into_rows(self, Pots, row_threshold):
         rows = []
         while len(Pots)>0:
@@ -485,6 +488,9 @@ class Pipeline:
 
         return predicted_masks
     def unet_output_data(self, images, predicted_masks, filenames):
+        if not self.group_identified:
+            raise Exception("Group not identfied: identify_group() has not been run beforehand! Please run identify_group() before.")
+
         if self.measure_size[0]:
             growth_file = self.filelocking_csv_writer(os.path.join(self.measure_size[1],"database.size.csv"))
             #growth_file.init_header(["Name", "Time", "Size"])
@@ -881,120 +887,6 @@ class Pipeline:
             filename_labels.append(os.path.join(base_dir, name+"_"+time_base))
 
         return filename_labels
-    def crop_and_label_pots_old(self, return_crop_list=False):
-        if not hasattr(self, "camera_map"):
-            raise Exception("No camera map has been loaded! Unable to label objects")
-        if not hasattr(self, "name_map"):
-            raise Exception("No name map has been loaded! Unable to label objects")
-        if self.PlantLabel not in self.boxes:
-            raise Exception("No plants available to label")
-        if len(self.boxes[self.PlantLabel])!=(self.nrow*self.ncol):
-            print("WARNING: Missing plants! Skipping this step.")
-            return None
-
-        camera, time_base, timestamp = self._get_camera_id_and_time_stamp()
-
-        time_dir = self._format_time(time_base, "%YY%mM%dD")
-
-        NS = self.camera_map[camera]['NS']
-        EW = self.camera_map[camera]['EW']
-        orient = self.camera_map[camera]['orient']
-
-        labels = self._get_pot_labels(NS, EW, orient)
-
-        pots = self.boxes[self.PlantLabel]
-
-        if return_crop_list:
-            crop_list = []
-            sample_list = []
-        else:
-            if self.measure_size[0]:
-                growth_file = self.filelocking_csv_writer(os.path.join(self.measure_size[1],"database.size.csv"))
-            if self.measure_greenness[0]:
-                greenness_file = self.filelocking_csv_writer(os.path.join(self.measure_greenness[1],"database.greenness.csv"))
-
-            growth_rows = []
-            greenness_rows = []
-
-        for pot, label in zip(pots, labels):
-            name = self.name_map[label[0]][label[1]]
-            c = self._center(pot)
-            dim = self.dim
-            left, right, top, bottom = self._get_region_of_center(c, dim)
-
-            if self.substructure[0]:
-                if self.substructure[1]=="Sample":
-                    for active_dir in self._get_active_dirs():
-                        new_dir = os.path.join(active_dir, name)
-                        if not os.path.isdir(new_dir):
-                            os.mkdir(new_dir)
-                    base_dir = name
-                if self.substructure[1]=="Time":
-                    for active_dir in self._get_active_dirs():
-                        new_dir = os.path.join(active_dir, time_dir)
-                        #print(new_dir)
-                        if not os.path.isdir(new_dir):
-                            os.mkdir(new_dir)
-                    base_dir = time_dir
-            else:
-                base_dir = ""
-
-            output_name = os.path.join(base_dir, name+"_"+time_base)
-
-            if return_crop_list:
-                crop_list.append(np.copy(self.image[top:bottom, left:right]))
-                sample_list.append([camera, timestamp, name])
-            else:
-                mini_img = np.copy(self.image[top:bottom, left:right])
-                mini_hsv, mini_lab = None, None
-                if self.HSV['enabled']: mini_hsv = self.HSVmask(img = mini_img)
-                if self.LAB['enabled']: mini_lab = self.LABmask(img = mini_img)
-                if mini_hsv is None:
-                    mini_mask = mini_lab
-                elif mini_lab is None:
-                    mini_mask = mini_hsv
-                else:
-                    mini_mask = self.combinemasks(mini_hsv, mini_lab)
-                #mini_mask_0 = mini_mask==0
-
-                if self.measure_size[0]:
-                    #blackpixels = np.where(mini_mask_0)
-                    #blackpixels = np.array(blackpixels)
-                    #size = str(blackpixels.shape[1])
-                    size = str(int(mini_mask.sum()))
-
-                    growth_rows.append([name, timestamp, size])
-
-                if self.measure_greenness[0]:
-                    if mini_mask.sum()>(self.dim*self.dim)*0.05:
-                        mean_degree, var_degree, n, plot_image = self.__circular_hsv(mini_img, mini_mask, plot=False)
-
-                        greenness_rows.append([name, timestamp, str(mean_degree), str(var_degree), str(n)])
-
-                    else:
-                        greenness_rows.append([name, timestamp, "NaN"])
-
-                if self.mask_output[0]:
-                    mini_img[mini_mask==0] = (0,0,0)
-                    Image.fromarray(mini_img).save(os.path.join(self.mask_output[1],output_name+"mask.jpg"), "JPEG")
-                    #io.imsave(os.path.join(self.mask_output[1],output_name+"mask.jpg"),
-                    #          mini_img)
-
-                if self.crop_output[0]:
-                    Image.fromarray(self.image[top:bottom, left:right]).save(os.path.join(self.crop_output[1],output_name+".jpg"), "JPEG")
-                    #io.imsave(os.path.join(self.crop_output[1],output_name+".jpg"),
-                    #          self.image[top:bottom, left:right])
-
-
-        if return_crop_list:
-            return crop_list, sample_list
-        else:
-            if self.measure_size[0]:
-                growth_file.write_rows(growth_rows)
-                growth_file.close()
-            if self.measure_greenness[0]:
-                greenness_file.write_rows(greenness_rows)
-                greenness_file.close()
     def crop_and_label_pots(self, return_crop_list=False):
         if not hasattr(self, "camera_map"):
             raise Exception("No camera map has been loaded! Unable to label objects")
@@ -1005,6 +897,8 @@ class Pipeline:
         if len(self.boxes[self.PlantLabel])!=(self.nrow*self.ncol):
             print("WARNING: Missing plants! Skipping this step.")
             return None
+        if not self.group_identified:
+            raise Exception("Group not identfied: identify_group() has not been run beforehand! Please run identify_group() before.")
 
         camera, time_base, timestamp = self._get_camera_id_and_time_stamp()
 
@@ -1034,6 +928,7 @@ class Pipeline:
             greenness_rows = []
 
         for i, label in enumerate(labels):
+            print(label)
             name = self.name_map[label[0]][label[1]]
 
             if self.substructure[0]:
