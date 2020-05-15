@@ -13,3 +13,7 @@
 *.coverage
 
 *.cache
+
+test_outputs/u-net/2171_*.jpg
+
+test_outputs/2171_*.jpg

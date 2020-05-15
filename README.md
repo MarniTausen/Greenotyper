@@ -119,7 +119,7 @@ Command line usage help message:
 
 ```
 Usage: 
-=========== GREENOTYPER (v0.6.1.dev3) ===========
+=========== GREENOTYPER (v0.6.1) ===========
 greenotyper -i image/directory -p settings.pipeline [options]
 
 Options:

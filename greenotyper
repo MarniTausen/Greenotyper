@@ -8,7 +8,7 @@ import sys
 from multiprocessing import Pool
 import time
 import traceback
-#import tqdm
+import tqdm
 import copy
 from math import ceil, floor
 import numpy as np

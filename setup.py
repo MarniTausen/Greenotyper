@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="greenotyper",
-    version="0.6.1.rc1",
+    version="0.6.1",
     scripts=["greenotyper"],
     author="Marni Tausen",
     author_email="marni.tausen@gmail.com",
@@ -22,7 +22,8 @@ setuptools.setup(
         "numpy>=1.15",
         "scikit-image>=0.14",
         "pillow>=5.2",
-        "Keras>=2.3"
+        "Keras>=2.3",
+        "tqdm>=4.40"
     ],
     classifiers=[
         "Programming Language :: Python :: 3.6",
