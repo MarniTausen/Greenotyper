@@ -20,8 +20,8 @@ import fcntl
 import errno
 
 ## Unet imports
-from keras.models import load_model
-from keras import backend as K
+#from keras.models import load_model
+#from keras import backend as K
 
 Image.MAX_IMAGE_PIXELS = None
 
@@ -96,7 +96,7 @@ class pipeline_settings:
 class Pipeline:
 
     def __get_version__(self):
-        self.__version__ = "0.6.1"
+        self.__version__ = "0.7.0.dev1"
         return self.__version__
 
     ## Initialization codes and file reading
@@ -459,10 +459,103 @@ class Pipeline:
 
         return predicted_masks
 
+    class Unet:
+        def __init__(self, traindata, labeldata, dim=512):
+            self.traindata = traindata
+            self.labeldata = labeldata
+            if self.validate_factor_of_2(dim):
+                self.img_rows = dim
+                self.img_cols = dim
+            else:
+                raise("Dimension provided is not a factor of 2!")
+        def validate_factor_of_2(self, dim):
+            temp_value = dim
+            while temp_value>4:
+                if temp_value / 2 % 2 != 0: return False
+                temp_value = temp_value / 2
+            return True
+        def create_unet(self):
+            inputs = tf.keras.layers.Input((self.img_rows, self.img_cols, 3))
+
+            conv1 = tf.keras.layers.Conv2D(64, 3, activation='relu', padding='same', kernel_initializer='he_normal')(inputs)
+            conv1 = tf.keras.layers.Conv2D(64, 3, activation='relu', padding='same', kernel_initializer='he_normal')(conv1)
+            pool1 = tf.keras.layers.MaxPooling2D(pool_size=(2,2))(conv1)
+
+            conv2 = tf.keras.layers.Conv2D(128, 3, activation='relu', padding='same', kernel_initializer='he_normal')(pool1)
+            conv2 = tf.keras.layers.Conv2D(128, 3, activation='relu', padding='same', kernel_initializer='he_normal')(conv2)
+            pool2 = tf.keras.layers.MaxPooling2D(pool_size=(2,2))(conv2)
+
+            conv3 = tf.keras.layers.Conv2D(256, 3, activation='relu', padding='same', kernel_initializer='he_normal')(pool2)
+            conv3 = tf.keras.layers.Conv2D(256, 3, activation='relu', padding='same', kernel_initializer='he_normal')(conv3)
+            pool3 = tf.keras.layers.MaxPooling2D(pool_size=(2,2))(conv3)
+
+            conv4 = tf.keras.layers.Conv2D(512, 3, activation='relu', padding='same', kernel_initializer='he_normal')(pool3)
+            conv4 = tf.keras.layers.Conv2D(512, 3, activation='relu', padding='same', kernel_initializer='he_normal')(conv4)
+            drop4 = tf.keras.layers.Dropout(0.5)(conv4)
+            pool4 = tf.keras.layers.MaxPooling2D(pool_size=(2,2))(drop4)
+
+            conv5 = tf.keras.layers.Conv2D(1024, 3, activation='relu', padding='same', kernel_initializer='he_normal')(pool4)
+            conv5 = tf.keras.layers.Conv2D(1024, 3, activation='relu', padding='same', kernel_initializer='he_normal')(conv5)
+            drop5 = tf.keras.layers.Dropout(0.5)(conv5)
+
+            up6 = tf.keras.layers.Conv2D(512, 2, activation='relu', padding='same', kernel_initializer='he_normal')(
+                tf.keras.layers.UpSampling2D(size=(2,2))(drop5))
+            merge6 = tf.keras.layers.concatenate([drop4, up6])
+            conv6 = tf.keras.layers.Conv2D(512, 3, activation='relu', padding='same', kernel_initializer='he_normal')(merge6)
+            conv6 = tf.keras.layers.Conv2D(512, 3, activation='relu', padding='same', kernel_initializer='he_normal')(conv6)
+
+            up7 = tf.keras.layers.Conv2D(256, 2, activation='relu', padding='same', kernel_initializer='he_normal')(
+                tf.keras.layers.UpSampling2D(size=(2,2))(conv6))
+            merge7 = tf.keras.layers.concatenate([conv3, up7])
+            conv7 = tf.keras.layers.Conv2D(256, 3, activation='relu', padding='same', kernel_initializer='he_normal')(merge7)
+            conv7 = tf.keras.layers.Conv2D(256, 3, activation='relu', padding='same', kernel_initializer='he_normal')(conv7)
+
+            up8 = tf.keras.layers.Conv2D(128, 2, activation='relu', padding='same', kernel_initializer='he_normal')(
+                tf.keras.layers.UpSampling2D(size=(2,2))(conv7))
+            merge8 = tf.keras.layers.concatenate([conv2, up8])
+            conv8 = tf.keras.layers.Conv2D(128, 3, activation='relu', padding='same', kernel_initializer='he_normal')(merge8)
+            conv8 = tf.keras.layers.Conv2D(128, 3, activation='relu', padding='same', kernel_initializer='he_normal')(conv8)
+
+            up9 = tf.keras.layers.Conv2D(64, 2, activation='relu', padding='same', kernel_initializer='he_normal')(
+                tf.keras.layers.UpSampling2D(size=(2,2))(conv8))
+            merge9 = tf.keras.layers.concatenate([conv1, up9])
+            conv9 = tf.keras.layers.Conv2D(64, 3, activation='relu', padding='same', kernel_initializer='he_normal')(merge9)
+            conv9 = tf.keras.layers.Conv2D(64, 3, activation='relu', padding='same', kernel_initializer='he_normal')(conv9)
+            conv9 = tf.keras.layers.Conv2D(2, 3, activation='relu', padding='same', kernel_initializer='he_normal')(conv9)
+
+            conv10 = tf.keras.layers.Conv2D(1, 1, activation='sigmoid')(conv9)
+
+            model = tf.keras.Model(inputs=inputs, outputs=conv10)
+
+            model.compile(optimizer='adam', loss='binary_crossentropy',
+                          metrics=['accuracy', self.recall_m, self.precision_m])
+
+            return model
+        def train(self, validation_img, validation_labels, epochs=20):
+            self.model = self.get_unet()
+            self.model_checkpoint = tf.keras.callbacks.ModelCheckpoint('currentbest.unet.hdf5', monitor='loss',
+                                                                       verbose=1, save_best_only=True)
+            logdir = datetime.now().strftime("%Y%m%d-%H%M%S")
+            self.tensorboard_callback = TensorBoard(log_dir=logdir)
+            self.model.fit(self.traindata, self.labeldata, batch_size=2, epochs=20,
+                           callbacks=[self.model_checkpoint, self.tensorboard_callback])
+        def save_model(self, filename):
+            self.model.save(filename+".h5")
+        def recall_m(self, y_true, y_pred):
+            true_positives = tf.keras.backend.sum(tf.keras.backend.round(tf.keras.backend.clip(y_true * y_pred, 0, 1)))
+            possible_positives = tf.keras.backend.sum(tf.keras.backend.round(tf.keras.backend.clip(y_true, 0, 1)))
+            recall = true_positives / (possible_positives + tf.keras.backend.epsilon())
+            return recall
+        def precision_m(self, y_true, y_pred):
+            true_positives = tf.keras.backend.sum(tf.keras.backend.round(tf.keras.backend.clip(y_true * y_pred, 0, 1)))
+            predicted_positives = tf.keras.backend.sum(tf.keras.backend.round(tf.keras.backend.clip(y_pred, 0, 1)))
+            precision = true_positives / (predicted_positives + tf.keras.backend.epsilon())
+            return precision
+
     ## Unet segmentation functions
     def load_unet(self, filename):
-        self.unet_model = load_model(filename, custom_objects={'recall_m': self.recall_m,
-                                                               'precision_m': self.precision_m})
+        self.unet_model = tf.keras.models.load_model(filename, custom_objects={'recall_m': self.recall_m,
+                                                                        'precision_m': self.precision_m})
     def unet_predict(self, image_data):
         if not hasattr(self, "unet_model"):
             raise Exception("No Unet has been loaded")
@@ -555,14 +648,14 @@ class Pipeline:
         return images
 
     def recall_m(self, y_true, y_pred):
-        true_positives = K.sum(K.round(K.clip(y_true * y_pred, 0, 1)))
-        possible_positives = K.sum(K.round(K.clip(y_true, 0, 1)))
-        recall = true_positives / (possible_positives + K.epsilon())
+        true_positives = tf.keras.backend.sum(tf.keras.backend.round(tf.keras.backend.clip(y_true * y_pred, 0, 1)))
+        possible_positives = tf.keras.backend.sum(tf.keras.backend.round(tf.keras.backend.clip(y_true, 0, 1)))
+        recall = true_positives / (possible_positives + tf.keras.backend.epsilon())
         return recall
     def precision_m(self, y_true, y_pred):
-        true_positives = K.sum(K.round(K.clip(y_true * y_pred, 0, 1)))
-        predicted_positives = K.sum(K.round(K.clip(y_pred, 0, 1)))
-        precision = true_positives / (predicted_positives + K.epsilon())
+        true_positives = tf.keras.backend.sum(tf.keras.backend.round(tf.keras.backend.clip(y_true * y_pred, 0, 1)))
+        predicted_positives = tf.keras.backend.sum(tf.keras.backend.round(tf.keras.backend.clip(y_pred, 0, 1)))
+        precision = true_positives / (predicted_positives + tf.keras.backend.epsilon())
         return precision
 
     def __circular_hsv(self, mini_img, mini_mask, plot=True):
