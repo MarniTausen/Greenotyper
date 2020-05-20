@@ -477,7 +477,23 @@ class TestOutputs(unittest.TestCase):
 
     #def test_crop_outputs(self): -> substructure sample
     #def test_mask_outputs(self): -> substructure time
-    #def test_circular_hsv_figure(self):
+    def test_circular_hsv_figure(self):
+        self.PL.open_image("sample_data/Cam41/Cam41_MT20180616113420_C39_69.jpg")
+        self.PL.infer_network_on_image()
+        self.PL.identify_group()
+        self.PL.color_correction()
+        self.PL.measure_greenness = (True, "test_outputs")
+
+        # reset file
+        _file = open("test_outputs/database.greenness.csv", "w")
+        _file.write("")
+        _file.close()
+
+        self.PL.crop_and_label_pots(return_crop_list=True, return_greenness_figures=True)
+
+class TestScanDirectory(unittest.TestCase):
+    pass
+
 
 class TestsPipelineRunner(unittest.TestCase):
 
@@ -499,7 +515,7 @@ class TestsPipelineRunner(unittest.TestCase):
         self.assertEqual(self.mainwindow.pipeline_file, "sample_data/sample.pipeline")
         self.assertEqual(self.mainwindow.pipeline_file_label.text(), "./sample_data/sample.pipeline")
 
-    def test_test_pipeline(self):
+    def test_pipeline_preparation(self):
         self.mainwindow.openPipeline("sample_data/sample.pipeline")
 
         self.mainwindow.openInputDirectory("sample_data/Cam41")
@@ -546,6 +562,27 @@ class TestsPipelineRunner(unittest.TestCase):
         self.mainwindow.use_gwf.setChecked(True)
 
         self.mainwindow.generateWorkflowFile()
+
+    def test_pipeline_test(self):
+        self.mainwindow.openPipeline("sample_data/sample.pipeline")
+
+        self.mainwindow.openInputDirectory("sample_data/Cam41")
+        self.mainwindow.openMaskDirectory("test_outputs")
+        self.mainwindow.openCropDirectory("test_outputs")
+        self.mainwindow.openSizeDirectory("test_outputs")
+        self.mainwindow.openGreennessDirectory("test_outputs")
+
+        self.mainwindow.mask_check.setChecked(False)
+        self.mainwindow.crop_check.setChecked(False)
+        self.mainwindow.size_check.setChecked(False)
+        self.mainwindow.greenness_check.setChecked(False)
+
+        self.mainwindow.test_images.setText("0")
+
+        QTest.qSleep(1)
+        box = self.mainwindow.testPipeline()
+
+
 
 class TestsPipelinePlanner(unittest.TestCase):
     def setUp(self):

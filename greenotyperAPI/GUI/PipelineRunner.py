@@ -467,21 +467,22 @@ class PipelineRunner(QWidget):
                               "No input directory selected!")
         else:
             #self.setOutputSettings(self.PL)
-            images = self.scan_directory(self.inputdir)
+            images = self.PL.scan_directory(self.inputdir)
             number_test_images = int(self.test_images.text())
-            self.total_input = number_test_images
-            self.time_mean = 30
-            self.progress.setMaximum(self.total_input)
-            self.progress.setValue(1)
-            self._update_time(30)
-            self.progress.setValue(0)
-            self.time_mean = 0
-            #self.time_left.setText("--h--m--s")
-            #self.image_counter = 0
             if number_test_images<1:
                 QMessageBox.about(self, "Test file number failure",
                                   "Number of test images must be positive")
             else:
+                self.total_input = number_test_images
+                self.time_mean = 30
+                self.progress.setMaximum(self.total_input)
+                self.progress.setValue(1)
+                self._update_time(30)
+                self.progress.setValue(0)
+                self.time_mean = 0
+                #self.time_left.setText("--h--m--s")
+                #self.image_counter = 0
+            
                 self.multi_process_images(images[:number_test_images])
     @pyqtSlot()
     def runPipeline(self):
@@ -489,7 +490,7 @@ class PipelineRunner(QWidget):
             QMessageBox.about(self, "Input directory missing",
                               "No input directory selected!")
         else:
-            images = self.scan_directory(self.inputdir)
+            images = self.PL.scan_directory(self.inputdir)
             self.total_input = len(images)
             self.time_mean = 30
             self.progress.setMaximum(self.total_input)
@@ -515,19 +516,6 @@ class PipelineRunner(QWidget):
             PL.substructure = (True, "Time")
         if self.divide_by_individual.isChecked():
             PL.substructure = (True, "Sample")
-    def scan_directory(self, directory):
-        items = os.listdir(directory)
-        files = []
-        for item in items:
-            if '.'==item[0]: continue
-            item_fp = os.path.join(directory, item)
-            if os.path.isfile(item_fp):
-                files.append(item_fp)
-            else:
-                internal_items = self.scan_directory(item_fp)
-                for in_item in internal_items:
-                    files.append(in_item)
-        return files
     def process_images(self, images):
 
         ## Test if network is loaded.

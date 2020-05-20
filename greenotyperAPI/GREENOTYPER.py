@@ -980,7 +980,7 @@ class Pipeline:
             filename_labels.append(os.path.join(base_dir, name+"_"+time_base))
 
         return filename_labels
-    def crop_and_label_pots(self, return_crop_list=False):
+    def crop_and_label_pots(self, return_crop_list=False, return_greenness_figures=False):
         if not hasattr(self, "camera_map"):
             raise Exception("No camera map has been loaded! Unable to label objects")
         if not hasattr(self, "name_map"):
@@ -1011,6 +1011,8 @@ class Pipeline:
         if return_crop_list:
             crop_list = []
             sample_list = []
+            if return_greenness_figures:
+                circular_hist_list = []
         else:
             if self.measure_size[0]:
                 growth_file = self.filelocking_csv_writer(os.path.join(self.measure_size[1],"database.size.csv"))
@@ -1046,6 +1048,12 @@ class Pipeline:
             if return_crop_list:
                 crop_list.append(np.copy(crops[i]))
                 sample_list.append([camera, timestamp, name])
+                if return_greenness_figures:
+                    mini_img = crops[i]
+                    mini_mask = predicted_masks[i].reshape((self.dim*2, self.dim*2))
+
+                    mean_degree, var_degree, n, plot_image = self.__circular_hsv(mini_img, mini_mask, plot=True)
+                    circular_hist_list.append(plot_image)
             else:
                 mini_img = crops[i]
                 mini_mask = predicted_masks[i].reshape((self.dim*2, self.dim*2))
@@ -1076,6 +1084,8 @@ class Pipeline:
 
 
         if return_crop_list:
+            if return_greenness_figures:
+                return crop_list, sample_list, circular_hist_list
             return crop_list, sample_list
         else:
             if self.measure_size[0]:
@@ -1141,12 +1151,6 @@ class Pipeline:
         def write_row(self, row):
             self._file.write(self.sep.join(row))
             self._file.write("\n")
-        def write(self, sep=","):
-            self._file.write(sep.join(self.header))
-            for row in self.rows:
-                self._file.write("\n")
-                self._file.write(sep.join(row))
-            self._file.close()
         def close(self):
             self._file.close()
 
@@ -1159,12 +1163,6 @@ class Pipeline:
             return self._file.readline()[:-1].split(self.sep)
         def __iter__(self):
             return self
-        def next(self):
-            data = self.readline()
-            if self.pos==self._file.tell():
-                raise StopIteration
-            self.pos = self._file.tell()
-            return data
         def __next__(self):
             data = self.readline()
             if self.pos==self._file.tell():
