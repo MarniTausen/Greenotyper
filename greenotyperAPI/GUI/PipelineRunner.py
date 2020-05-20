@@ -450,9 +450,10 @@ class PipelineRunner(QWidget):
         self.commandline_group.addLayout(self.commandline_buttons)
 
     @pyqtSlot()
-    def openPipeline(self):
-        fileName, _ = QFileDialog.getOpenFileName(self,"QFileDialog.getOpenFileName()", "",
-                                                  "Pipeline file (*.pipeline);;All Files (*)")
+    def openPipeline(self, fileName=None):
+        if fileName is None:
+            fileName, _ = QFileDialog.getOpenFileName(self,"QFileDialog.getOpenFileName()", "",
+                                                      "Pipeline file (*.pipeline);;All Files (*)")
         if fileName:
             self.PS.read(fileName)
             wd = os.getcwd()
@@ -597,38 +598,43 @@ class PipelineRunner(QWidget):
         self.PipelinePlannerApp.setWindowIcon(self.windowicon)
 
     @pyqtSlot()
-    def openInputDirectory(self):
-        dir_name = str(QFileDialog.getExistingDirectory(self, "Select Network Directory", "Network Directory"))
+    def openInputDirectory(self, dir_name=None):
+        if dir_name is None:
+            dir_name = str(QFileDialog.getExistingDirectory(self, "Select Network Directory", "Network Directory"))
         if dir_name:
             self.inputdir_label.setText("./"+os.path.relpath(dir_name, self.wd))
             self.inputdir = dir_name
     @pyqtSlot()
-    def openMaskDirectory(self):
-        dir_name = str(QFileDialog.getExistingDirectory(self, "Select Mask output directory", "Mask Directory"))
+    def openMaskDirectory(self, dir_name=None):
+        if dir_name is None:
+            dir_name = str(QFileDialog.getExistingDirectory(self, "Select Mask output directory", "Mask Directory"))
         if dir_name:
             self.maskout_label.setText("./"+os.path.relpath(dir_name, self.wd))
             self.maskdir = dir_name
             self.mask_check.setChecked(True)
             self.mask_check.setDisabled(False)
     @pyqtSlot()
-    def openCropDirectory(self):
-        dir_name = str(QFileDialog.getExistingDirectory(self, "Select Crop output Directory", "Crop Directory"))
+    def openCropDirectory(self, dir_name=None):
+        if dir_name is None:
+            dir_name = str(QFileDialog.getExistingDirectory(self, "Select Crop output Directory", "Crop Directory"))
         if dir_name:
             self.cropout_label.setText("./"+os.path.relpath(dir_name, self.wd))
             self.cropdir = dir_name
             self.crop_check.setChecked(True)
             self.crop_check.setDisabled(False)
     @pyqtSlot()
-    def openSizeDirectory(self):
-        dir_name = str(QFileDialog.getExistingDirectory(self, "Select Size output Directory", "Size Directory"))
+    def openSizeDirectory(self, dir_name=None):
+        if dir_name is None:
+            dir_name = str(QFileDialog.getExistingDirectory(self, "Select Size output Directory", "Size Directory"))
         if dir_name:
             self.sizeout_label.setText("./"+os.path.relpath(dir_name, self.wd))
             self.sizedir = dir_name
             self.size_check.setChecked(True)
             self.size_check.setDisabled(False)
     @pyqtSlot()
-    def openGreennessDirectory(self):
-        dir_name = str(QFileDialog.getExistingDirectory(self, "Select Greenness output Directory", "Greenness Directory"))
+    def openGreennessDirectory(self, dir_name=None):
+        if dir_name is None:
+            dir_name = str(QFileDialog.getExistingDirectory(self, "Select Greenness output Directory", "Greenness Directory"))
         if dir_name:
             self.greennessout_label.setText("./"+os.path.relpath(dir_name, self.wd))
             self.greennessdir = dir_name

@@ -315,13 +315,3 @@ class QRangeSlider(QtWidgets.QWidget, Ui_Form):
         _unlockWidth(self._tail)
         _unlockWidth(self._head)
         _unlockWidth(self._handle)
-
-if __name__ == '__main__':
-
-    app = QtWidgets.QApplication(sys.argv)
-    rs = QRangeSlider()
-    rs.show()
-    rs.setRange(15, 35)
-    rs.setBackgroundStyle('background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #222, stop:1 #333);')
-    rs.handle.setStyleSheet('background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #282, stop:1 #393);')
-    app.exec_()

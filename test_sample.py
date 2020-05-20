@@ -488,11 +488,64 @@ class TestsPipelineRunner(unittest.TestCase):
         del self.mainwindow
 
     def test_defaults(self):
-
         self.mainwindow.setOutputSettings(self.mainwindow.PL)
         self.mainwindow.updateCommandline()
 
         self.assertTrue(True)
+
+    def test_open_pipeline(self):
+        self.mainwindow.openPipeline("sample_data/sample.pipeline")
+
+        self.assertEqual(self.mainwindow.pipeline_file, "sample_data/sample.pipeline")
+        self.assertEqual(self.mainwindow.pipeline_file_label.text(), "./sample_data/sample.pipeline")
+
+    def test_test_pipeline(self):
+        self.mainwindow.openPipeline("sample_data/sample.pipeline")
+
+        self.mainwindow.openInputDirectory("sample_data/Cam41")
+
+        self.assertEqual(self.mainwindow.inputdir, "sample_data/Cam41")
+        self.assertEqual(self.mainwindow.inputdir_label.text(), "./sample_data/Cam41")
+
+        self.mainwindow.openMaskDirectory("test_outputs")
+        self.assertEqual(self.mainwindow.maskdir, "test_outputs")
+        self.assertEqual(self.mainwindow.maskout_label.text(), "./test_outputs")
+        self.assertTrue(self.mainwindow.mask_check.isChecked())
+
+        self.mainwindow.openCropDirectory("test_outputs")
+        self.assertEqual(self.mainwindow.cropdir, "test_outputs")
+        self.assertEqual(self.mainwindow.cropout_label.text(), "./test_outputs")
+        self.assertTrue(self.mainwindow.crop_check.isChecked())
+
+        self.mainwindow.openSizeDirectory("test_outputs")
+        self.assertEqual(self.mainwindow.sizedir, "test_outputs")
+        self.assertEqual(self.mainwindow.sizeout_label.text(), "./test_outputs")
+        self.assertTrue(self.mainwindow.size_check.isChecked())
+
+        self.mainwindow.openGreennessDirectory("test_outputs")
+        self.assertEqual(self.mainwindow.greennessdir, "test_outputs")
+        self.assertEqual(self.mainwindow.greennessout_label.text(), "./test_outputs")
+        self.assertTrue(self.mainwindow.greenness_check.isChecked())
+
+        self.mainwindow.divide_by_day.setChecked(True)
+        self.mainwindow.setOutputSettings(self.mainwindow.PL)
+        self.mainwindow.updateCommandline()
+
+        self.mainwindow.divide_by_individual.setChecked(True)
+        self.mainwindow.relative_paths.setChecked(True)
+        self.mainwindow.setOutputSettings(self.mainwindow.PL)
+        self.mainwindow.updateCommandline()
+
+        self.mainwindow.divide_by_day.setChecked(False)
+        self.mainwindow.divide_by_individual.setChecked(False)
+        self.mainwindow.no_subfolders.setChecked(True)
+
+        self.mainwindow.generateWorkflowFile()
+
+        self.mainwindow.use_bash.setChecked(False)
+        self.mainwindow.use_gwf.setChecked(True)
+
+        self.mainwindow.generateWorkflowFile()
 
 class TestsPipelinePlanner(unittest.TestCase):
     def setUp(self):
