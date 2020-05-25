@@ -496,6 +496,7 @@ class TestsPipelineRunner(unittest.TestCase):
     def setUp(self):
         from greenotyperAPI.GUI import PipelineRunner
         self.mainwindow = PipelineRunner.PipelineRunner()
+        self.mainwindow.windowicon = QtGui.QIcon(os.path.join(sys.prefix,'icon.png'))
     def tearDown(self):
         del self.mainwindow
 
@@ -562,7 +563,7 @@ class TestsPipelineRunner(unittest.TestCase):
     def test_pipeline_test(self):
         self.mainwindow.openPipeline("sample_data/sample.pipeline")
 
-        self.mainwindow.openInputDirectory("sample_data/Cam41")
+        self.mainwindow.openInputDirectory("test_data/test_images")
         self.mainwindow.openMaskDirectory("test_outputs")
         self.mainwindow.openCropDirectory("test_outputs")
         self.mainwindow.openSizeDirectory("test_outputs")
@@ -579,6 +580,8 @@ class TestsPipelineRunner(unittest.TestCase):
 
         self.mainwindow.testPipeline(False)
 
+    def test_open_pipeline_planner(self):
+        self.mainwindow.OpenPipelinePlanner()
 
 
 class TestsPipelinePlanner(unittest.TestCase):

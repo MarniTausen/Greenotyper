@@ -520,11 +520,6 @@ class PipelineRunner(QWidget):
         if self.divide_by_individual.isChecked():
             PL.substructure = (True, "Sample")
     def process_images(self, images):
-
-        ## Test if network is loaded.
-        ## Test if camera map is loaded
-        ## Test if id map is loaded
-
         for image in images:
             start = time.time()
             try:
