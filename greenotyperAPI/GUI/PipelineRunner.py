@@ -461,7 +461,7 @@ class PipelineRunner(QWidget):
             self.pipeline_file_label.setText("./"+os.path.relpath(fileName, wd))
             self.PL.load_pipeline(self.PS)
     @pyqtSlot()
-    def testPipeline(self):
+    def testPipeline(self, multiprocess=True):
         if self.inputdir is None:
             QMessageBox.about(self, "Input directory missing",
                               "No input directory selected!")
@@ -482,8 +482,11 @@ class PipelineRunner(QWidget):
                 self.time_mean = 0
                 #self.time_left.setText("--h--m--s")
                 #self.image_counter = 0
-            
-                self.multi_process_images(images[:number_test_images])
+
+                if multiprocess:
+                    self.multi_process_images(images[:number_test_images])
+                else:
+                    self.process_images(images[:number_test_images])
     @pyqtSlot()
     def runPipeline(self):
         if self.inputdir is None:
@@ -523,28 +526,24 @@ class PipelineRunner(QWidget):
         ## Test if id map is loaded
 
         for image in images:
-            print("Reading image!")
-            self.PL.open_image(image)
-            print("Searching for plants")
-            self.PL.infer_network_on_image()
-            print("Applying color correction")
-            self.PL.color_correction()
-            print("Identifying group")
-            self.PL.identify_group()
-            print("Cropping and labelling pots")
-            self.PL.crop_and_label_pots()
-    def multi_process_images_with_Pool(self, images):
-        n_process = int(self.multicore.text())
-        print("Running with {} processes".format(n_process))
-
-        arg_calls = []
-        for image in images:
-            arg_calls.append([image, self.PS])
-
-        pool = mp.Pool(processes=n_process)
-        results = pool.map(_single_process, arg_calls)
-        pool.terminate()
-        pool.join()
+            start = time.time()
+            try:
+                print("Reading image!")
+                self.PL.open_image(image)
+                print("Searching for plants")
+                self.PL.infer_network_on_image()
+                print("Applying color correction")
+                self.PL.color_correction()
+                print("Identifying group")
+                self.PL.identify_group()
+                print("Cropping and labelling pots")
+                self.PL.crop_and_label_pots()
+            except:
+                traceback.print_exc()
+                exctype, value = sys.exc_info()[:2]
+                self._report_error((exctype, value, traceback.format_exc()))
+            self._process_complete()
+            self._update_time(time.time()-start)
     def _process_complete(self):
         self.progress.setValue(self.progress.value()+1)
         if self.progress.value()==self.total_input:

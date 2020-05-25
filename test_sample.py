@@ -491,10 +491,6 @@ class TestOutputs(unittest.TestCase):
 
         self.PL.crop_and_label_pots(return_crop_list=True, return_greenness_figures=True)
 
-class TestScanDirectory(unittest.TestCase):
-    pass
-
-
 class TestsPipelineRunner(unittest.TestCase):
 
     def setUp(self):
@@ -577,10 +573,11 @@ class TestsPipelineRunner(unittest.TestCase):
         self.mainwindow.size_check.setChecked(False)
         self.mainwindow.greenness_check.setChecked(False)
 
-        self.mainwindow.test_images.setText("0")
+        self.mainwindow.setOutputSettings(self.mainwindow.PL)
 
-        QTest.qSleep(1)
-        box = self.mainwindow.testPipeline()
+        self.mainwindow.test_images.setText("3")
+
+        self.mainwindow.testPipeline(False)
 
 
 
