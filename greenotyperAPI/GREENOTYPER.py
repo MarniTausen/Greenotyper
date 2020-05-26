@@ -18,6 +18,8 @@ from multiprocessing import Pool
 import numpy as np
 import fcntl
 import errno
+from itertools import product
+from skimage.transform import resize
 
 ## Unet imports
 #from keras.models import load_model
@@ -96,7 +98,7 @@ class pipeline_settings:
 class Pipeline:
 
     def __get_version__(self):
-        self.__version__ = "0.7.0.dev1"
+        self.__version__ = "0.7.0.dev2"
         return self.__version__
 
     ## Initialization codes and file reading
@@ -551,6 +553,102 @@ class Pipeline:
             predicted_positives = tf.keras.backend.sum(tf.keras.backend.round(tf.keras.backend.clip(y_pred, 0, 1)))
             precision = true_positives / (predicted_positives + tf.keras.backend.epsilon())
             return precision
+
+
+    def _flatten_label_image(self, labelimg):
+        return labelimg.sum(2)//3
+    def _normalise_label_image(self, labelimg):
+        labelimg[labelimg<255] = 1
+        labelimg[labelimg==255] = 0
+        return labelimg
+    def load_train_data(self, traindir, width=512, height=512):
+        train_imgs = sorted(filter(lambda x: ".jpg" in x, os.listdir(os.path.join(traindir, "image"))))
+        label_imgs = sorted(filter(lambda x: ".jpg" in x, os.listdir(os.path.join(traindir, "label"))))
+
+        n_samples = len(train_imgs)
+
+        traindata = np.ndarray((n_samples, width, height, 3), dtype=np.float32)
+        labeldata = np.ndarray((n_samples, width, height, 1), dtype=np.float32)
+
+        i = 0
+
+        for trainname, labelname in zip(train_imgs, label_imgs):
+            if trainname!=labelname:
+                raise Exception("Train and label names do not match! Make sure all train and label names match exactly, and that there is an equal amount of images in the image and label directories.")
+            trainimg = tf.keras.preprocessing.image.img_to_array(tf.keras.preprocessing.image.load_img(os.path.join(traindir, "image", trainname), grayscale=False, target_size=[512, 512]))
+            labelimg = tf.keras.preprocessing.image.img_to_array(tf.keras.preprocessing.image.load_img(os.path.join(traindir, "label", labelname), grayscale=False, target_size=[512, 512]))
+
+            labelimg = self._flatten_label_image(labelimg)
+            labelimg = self._normalise_label_image(labelimg)
+            labelimg = labelimg.reshape((512, 512, 1))
+
+            traindata[i] = trainimg/255
+            labeldata[i] = labelimg
+
+            i += 1
+
+        return traindata, labeldata, train_imgs
+
+    def _generate_corner_crops(self,img_dim, cropsize):
+        hoff, woff = img_dim[0]-cropsize[0], img_dim[1]-cropsize[1]
+        h_crops = [(0,cropsize[0]),(hoff,img_dim[0])]
+        w_crops = [(0,cropsize[1]),(woff,img_dim[1])]
+        return list(product(*[h_crops, w_crops]))
+    def augment_data(self, traindata, labeldata, Flips=True, Rotations=True, Crops=True, Cropdimension=(460,460)):
+        n_samples, width, height = traindata.shape[:3]
+
+        if Flips:
+            Flips = [False, True]
+        else:
+            Flips = [False]
+
+        if Rotations:
+            Rotations = [0,1,2,3]
+        else:
+            Rotations = [0]
+
+        if Crops:
+            Crops = [((0,height),(0,width))]+self._generate_corner_crops((height,width), Cropdimension)
+        else:
+            Crops = [((0,height),(0,width))]
+
+        augmentations = list(product(*[Flips, Rotations, Crops]))
+
+        n_augments = len(augmentations)
+
+        n_total = n_samples*n_augments
+
+        augmented_traindata = np.ndarray((n_total, height, width, 3), dtype=np.float32)
+        augmented_labeldata = np.ndarray((n_total, height, width, 1), dtype=np.float32)
+
+        i = 0
+
+        for j in range(n_samples):
+            current_train = traindata[j]
+            current_label = labeldata[j]
+            for flip, rot, crop in augmentations:
+                curtrain_img = current_train[crop[0][0]:crop[0][1],crop[1][0]:crop[1][1]]
+                curtrain_img = resize(curtrain_img, (height, width, 1))
+
+                curlabel_img = current_label[crop[0][0]:crop[0][1],crop[1][0]:crop[1][1]]
+                curlabel_img = resize(curlabel_img, (height, width, 1))
+
+                if flip:
+                    curtrain_img = np.flip(curtrain_img, axis=(0,1))
+                    curtrain_img = np.rot90(curtrain_img, rot)
+
+                    curlabel_img = np.flip(curlabel_img, axis=(0,1))
+                    curlabel_img = np.rot90(curlabel_img, rot)
+                else:
+                    curtrain_img = np.rot90(curtrain_img, rot)
+                    curlabel_img = np.rot90(curlabel_img, rot)
+
+                augmented_traindata[i] = curtrain_img/255
+                augmented_labeldata[i] = curlabel_img
+
+                i += 1
+
+        return augmented_traindata, augmented_labeldata
 
     ## Unet segmentation functions
     def load_unet(self, filename):

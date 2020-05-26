@@ -725,3 +725,12 @@ class TestsUnet(unittest.TestCase):
 
         for i in good_resolutions:
             self.assertTrue(Unet_model.validate_factor_of_2(i))
+
+    def test_load_train_data_and_augmentations(self):
+        traindata, labeldata, filenames = self.PL.load_train_data("training_data/u-net/validation")
+
+        self.assertEqual(8, traindata.shape[0])
+
+        augment_train, augment_label = self.PL.augment_data(traindata, labeldata)
+
+        self.assertEqual(8*40, augment_train.shape[0])
