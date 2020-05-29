@@ -734,3 +734,67 @@ class TestsUnet(unittest.TestCase):
         augment_train, augment_label = self.PL.augment_data(traindata, labeldata)
 
         self.assertEqual(8*40, augment_train.shape[0])
+
+    def tests_no_augmentations(self):
+        traindata, labeldata, filenames = self.PL.load_train_data("training_data/u-net/validation")
+
+        self.assertEqual(8, traindata.shape[0])
+
+        augment_train, augment_label = self.PL.augment_data(traindata, labeldata, Flips=False,
+                                                            Rotations=False, Crops=False)
+
+        self.assertEqual(8, augment_train.shape[0])
+
+    def test_segmentation_measures(self):
+        truth_array = [[0,0,1,0,0],
+                       [0,1,1,1,0],
+                       [1,1,1,1,1],
+                       [0,1,1,1,0],
+                       [0,0,1,0,0]]
+        truth_array = np.array(truth_array)
+        prediction_array = [[0,0,0,0,0],
+                            [0,1,1,1,0],
+                            [0,1,1,1,0],
+                            [0,1,1,1,0],
+                            [0,1,1,1,0]]
+        prediction_array = np.array(prediction_array)
+
+        TN, TP = 10, 10
+        FN, FP = 3, 2
+
+        true_precision = TP/(TP+FP)
+        true_recall = TP/(TP+FN)
+        true_pixel_accuracy = (TP+TN)/(TP+TN+FN+FP)
+        true_iou = TP/(TP+FN+FP)
+        true_dice_coefficient = (2*TP)/((TP+FN)+(TP+FP))
+
+        self.assertEqual(true_precision, self.PL._precision(truth_array, prediction_array))
+        self.assertEqual(true_recall, self.PL._recall(truth_array, prediction_array))
+        self.assertEqual(true_pixel_accuracy, self.PL._pixel_accuracy(truth_array, prediction_array))
+        self.assertEqual(true_iou, self.PL._iou_score(truth_array, prediction_array))
+        self.assertEqual(true_dice_coefficient, self.PL._dice_coefficient(truth_array, prediction_array))
+
+    def test_pascal_voc_ap(self):
+        recalls = [0.4, 0.50, 0.55, 0.60, 0.70, 0.75, 0.80, 0.85, 0.90, 0.95, 0.99, 1]
+        precisions = [1, 1, 0.95, 0.85, 0.90, 0.80, 0.75, 0.85, 0.70, 0.75, 0.70, 0.65]
+        ious = [0.3, 0.5, 0.6, 0.55, 0.60, 0.65, 0.50, 0.70, 0.4, 0.60, 0.55, 0.60]
+
+        true_all_AP = ((0.5-0)*1)+((0.55-0.5)*0.95)+((0.7-0.55)*0.90)+((0.85-0.7)*0.85)+((0.95-0.85)*0.75)+((0.99-0.95)*0.70)+((1-0.99)*0.65)
+
+        true_all_50IOU = ((0.5-0)*1)+((0.55-0.5)*0.95)+((0.7-0.55)*0.90)+((0.85-0.7)*0.85)+((0.95-0.85)*0.75)+((0.99-0.95)*0.70)+((1-0.99)*0.65)
+
+        true_all_60IOU = ((0.55-0)*0.95)+((0.7-0.55)*0.90)+((0.85-0.7)*0.85
+
+                                                            )+((0.95-0.85)*0.75)+((1-0.95)*0.65)
+
+        self.assertEqual(true_all_AP, self.PL._PASCAL_VOC_AP(precisions, recalls, ious, IoU=0))
+
+        self.assertEqual(true_all_50IOU, self.PL._PASCAL_VOC_AP(precisions, recalls, ious, IoU=0.5))
+
+        self.assertEqual(true_all_60IOU, self.PL._PASCAL_VOC_AP(precisions, recalls, ious, IoU=0.6))
+
+    def test_join_unet_data(self):
+        traindata, _, filenames = self.PL.load_train_data("training_data/u-net/validation")
+        testdata, _, testfilenames = self.PL.load_train_data("training_data/u-net/test")
+
+        self.PL.unet_join_image_data([(traindata, filenames), (testdata, testfilenames)])

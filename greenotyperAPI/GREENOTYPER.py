@@ -98,7 +98,7 @@ class pipeline_settings:
 class Pipeline:
 
     def __get_version__(self):
-        self.__version__ = "0.7.0.dev2"
+        self.__version__ = "0.7.0.dev3"
         return self.__version__
 
     ## Initialization codes and file reading
@@ -120,7 +120,6 @@ class Pipeline:
         self.mask_output = (False, "")
         self.crop_output = (False, "")
         self.substructure = (False, "")
-        self.unet_run = (False, "")
         self.group_identified = False
     def load_pipeline(self, pipeline):
         self.pipeline_settings = pipeline
@@ -533,14 +532,22 @@ class Pipeline:
                           metrics=['accuracy', self.recall_m, self.precision_m])
 
             return model
-        def train(self, validation_img, validation_labels, epochs=20):
-            self.model = self.get_unet()
-            self.model_checkpoint = tf.keras.callbacks.ModelCheckpoint('currentbest.unet.hdf5', monitor='loss',
+        def train(self, unet_file, validation_img=None, validation_labels=None, validation_split=0.2, epochs=20):
+            self.model = self.create_unet()
+            self.model_checkpoint = tf.keras.callbacks.ModelCheckpoint(unet_file, monitor='loss',
                                                                        verbose=1, save_best_only=True)
             logdir = datetime.now().strftime("%Y%m%d-%H%M%S")
-            self.tensorboard_callback = TensorBoard(log_dir=logdir)
-            self.model.fit(self.traindata, self.labeldata, batch_size=2, epochs=20,
-                           callbacks=[self.model_checkpoint, self.tensorboard_callback])
+            self.tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir=logdir)
+            if validation_img is None:
+                self.model.fit(self.traindata, self.labeldata, batch_size=2, epochs=epochs,
+                               validation_split=validation_split,
+                               validation_freq=1, shuffle=True,
+                               callbacks=[self.model_checkpoint, self.tensorboard_callback])
+            else:
+                self.model.fit(self.traindata, self.labeldata, batch_size=2, epochs=epochs,
+                               validation_data=(validation_img, validation_labels),
+                               validation_freq=1, shuffle=True,
+                               callbacks=[self.model_checkpoint, self.tensorboard_callback])
         def save_model(self, filename):
             self.model.save(filename+".h5")
         def recall_m(self, y_true, y_pred):
@@ -553,7 +560,6 @@ class Pipeline:
             predicted_positives = tf.keras.backend.sum(tf.keras.backend.round(tf.keras.backend.clip(y_pred, 0, 1)))
             precision = true_positives / (predicted_positives + tf.keras.backend.epsilon())
             return precision
-
 
     def _flatten_label_image(self, labelimg):
         return labelimg.sum(2)//3
@@ -650,6 +656,69 @@ class Pipeline:
 
         return augmented_traindata, augmented_labeldata
 
+    def _iou_score(self, target, prediction):
+        intersection = np.logical_and(target, prediction)
+        union = np.logical_or(target, prediction)
+        return np.sum(intersection)/np.sum(union)
+    def _pixel_accuracy(self, target, prediction):
+        n = target.shape[0]*target.shape[1]
+        TP = np.sum(np.logical_and(target, prediction))
+        union = np.sum(np.logical_or(target, prediction))
+        FPFN = union - TP
+        TN = n - TP - FPFN
+        return (TP+TN)/n
+    def _precision(self, target, prediction):
+        n = target.shape[0]*target.shape[1]
+        FULL_TRUTH = target.sum()
+        TP = np.sum(np.logical_and(target, prediction))
+        union = np.sum(np.logical_or(target, prediction))
+        FP = union - FULL_TRUTH
+        FN = union - TP - FP
+        TN = n - TP - FP - FN
+        return TP/(TP+FP)
+    def _recall(self, target, prediction):
+        n = target.shape[0]*target.shape[1]
+        FULL_TRUTH = target.sum()
+        TP = np.sum(np.logical_and(target, prediction))
+        union = np.sum(np.logical_or(target, prediction))
+        FP = union - FULL_TRUTH
+        FN = union - TP - FP
+        TN = n - TP - FP - FN
+        return TP/(TP+FN)
+    def _dice_coefficient(self, target, prediction):
+        intersection = np.sum(np.logical_and(target, prediction))
+        return 2*intersection/(target.sum()+prediction.sum())
+    def _f1_score(self, target, prediction):
+        precision = self._precision(target, prediction)
+        recall = self._recall(target, prediction)
+        return 2*(precision*recall)/(precision+recall)
+    def _PASCAL_VOC_AP(self, precisions, recalls, ious, IoU=0.5):
+        ## AP (Area under curve AUC)
+        pascal_info = list()
+        for iou, pre, rec in zip(ious, precisions, recalls):
+            pascal_info.append((iou>=IoU, pre, rec))
+
+        ## Remove False-positives based on the IoU score:
+        pascal_info = filter(lambda x: x[0]==True, pascal_info)
+
+        ## Rank values by recall
+        pascal_info = sorted(pascal_info, key=lambda x: x[2])
+
+        i = 0
+        r1 = 0
+        r2 = 0
+        sum_list = list()
+        while i<len(pascal_info):
+            i += max(range(len(pascal_info[i:])), key=lambda j: pascal_info[i:][j][1])
+            r2 = pascal_info[i][2]
+            p = pascal_info[i][1]
+            sum_list.append((r2-r1)*p)
+            r1 = r2
+            i += 1
+        sum_list.append((1-r2)*p)
+
+        return sum(sum_list)
+
     ## Unet segmentation functions
     def load_unet(self, filename):
         self.unet_model = tf.keras.models.load_model(filename, custom_objects={'recall_m': self.recall_m,
@@ -697,9 +766,34 @@ class Pipeline:
             mini_img = (images[i]*255).astype(np.uint8)
             mini_mask = predicted_masks[i].reshape((512,512))
 
+            if self.substructure[0]:
+                if self.substructure[1]=="Sample":
+                    for active_dir in self._get_active_dirs():
+                        new_dir = os.path.join(active_dir, name)
+                        if not os.path.isdir(new_dir):
+                            try:
+                                os.mkdir(new_dir)
+                            except:
+                                pass
+                    output_name = os.path.join(name,output_name)
+                if self.substructure[1]=="Time":
+                    for active_dir in self._get_active_dirs():
+                        new_dir = os.path.join(active_dir, timestamp)
+                        #print(new_dir)
+                        if not os.path.isdir(new_dir):
+                            try:
+                                os.mkdir(new_dir)
+                            except:
+                                pass
+                    output_name = os.path.join(timestamp,output_name)
+
             if self.measure_size[0]:
                 size = str(int(mini_mask.sum()))
                 growth_rows.append([name, timestamp, size])
+
+            if self.crop_output[0]:
+                Image.fromarray(mini_img).save(os.path.join(self.crop_output[1],output_name+".jpg"), "JPEG")
+
             if self.measure_greenness[0]:
                 if mini_mask.sum()>(512*512)*0.02 :
                     mean_degree, var_degree, n, plot_image = self.__circular_hsv(mini_img, mini_mask, plot=False)
@@ -711,9 +805,6 @@ class Pipeline:
                 crop_img = np.copy(mini_img)
                 crop_img[mini_mask==0] = (0,0,0)
                 Image.fromarray(crop_img).save(os.path.join(self.mask_output[1],output_name+"mask.jpg"), "JPEG")
-
-            if self.crop_output[0]:
-                Image.fromarray(mini_img).save(os.path.join(self.crop_output[1],output_name+".jpg"), "JPEG")
 
         if self.measure_size[0]:
             growth_file.write_rows(growth_rows)
@@ -1058,24 +1149,7 @@ class Pipeline:
         for label in labels:
             name = self.name_map[label[0]][label[1]]
 
-            if self.substructure[0]:
-                if self.substructure[1]=="Sample":
-                    for active_dir in self._get_active_dirs():
-                        new_dir = os.path.join(active_dir, name)
-                        if not os.path.isdir(new_dir):
-                            os.mkdir(new_dir)
-                    base_dir = name
-                if self.substructure[1]=="Time":
-                    for active_dir in self._get_active_dirs():
-                        new_dir = os.path.join(active_dir, time_dir)
-                        #print(new_dir)
-                        if not os.path.isdir(new_dir):
-                            os.mkdir(new_dir)
-                    base_dir = time_dir
-            else:
-                base_dir = ""
-
-            filename_labels.append(os.path.join(base_dir, name+"_"+time_base))
+            filename_labels.append(name+"_"+time_base)
 
         return filename_labels
     def crop_and_label_pots(self, return_crop_list=False, return_greenness_figures=False):
@@ -1086,8 +1160,7 @@ class Pipeline:
         if self.PlantLabel not in self.boxes:
             raise Exception("No plants available to label")
         if len(self.boxes[self.PlantLabel])!=(self.nrow*self.ncol):
-            print("WARNING: Missing plants! Skipping this step.")
-            return None
+            return("WARNING: Missing plants! Cannot output for image: {}".format(self._image_filename))
         if not self.group_identified:
             raise Exception("Group not identfied: identify_group() has not been run beforehand! Please run identify_group() before.")
 
@@ -1121,7 +1194,6 @@ class Pipeline:
             greenness_rows = []
 
         for i, label in enumerate(labels):
-            print(label)
             name = self.name_map[label[0]][label[1]]
 
             if self.substructure[0]:
@@ -1129,14 +1201,20 @@ class Pipeline:
                     for active_dir in self._get_active_dirs():
                         new_dir = os.path.join(active_dir, name)
                         if not os.path.isdir(new_dir):
-                            os.mkdir(new_dir)
+                            try:
+                                os.mkdir(new_dir)
+                            except:
+                                pass
                     base_dir = name
                 if self.substructure[1]=="Time":
                     for active_dir in self._get_active_dirs():
                         new_dir = os.path.join(active_dir, time_dir)
                         #print(new_dir)
                         if not os.path.isdir(new_dir):
-                            os.mkdir(new_dir)
+                            try:
+                                os.mkdir(new_dir)
+                            except:
+                                pass
                     base_dir = time_dir
             else:
                 base_dir = ""
@@ -1153,7 +1231,7 @@ class Pipeline:
                     mean_degree, var_degree, n, plot_image = self.__circular_hsv(mini_img, mini_mask, plot=True)
                     circular_hist_list.append(plot_image)
             else:
-                mini_img = crops[i]
+                mini_img = np.copy(crops[i])
                 mini_mask = predicted_masks[i].reshape((self.dim*2, self.dim*2))
 
                 if self.measure_size[0]:
@@ -1168,6 +1246,9 @@ class Pipeline:
                     else:
                         greenness_rows.append([name, timestamp, "NaN"])
 
+                if self.crop_output[0]:
+                    Image.fromarray(crops[i]).save(os.path.join(self.crop_output[1],output_name+".jpg"), "JPEG")
+
                 if self.mask_output[0]:
                     crop_img = np.copy(crops[i])
                     crop_img[mini_mask==0] = (0,0,0)
@@ -1175,10 +1256,7 @@ class Pipeline:
                     #io.imsave(os.path.join(self.mask_output[1],output_name+"mask.jpg"),
                     #          mini_img)
 
-                if self.crop_output[0]:
-                    Image.fromarray(crops[i]).save(os.path.join(self.crop_output[1],output_name+".jpg"), "JPEG")
-                    #io.imsave(os.path.join(self.crop_output[1],output_name+".jpg"),
-                    #          self.image[top:bottom, left:right])
+
 
 
         if return_crop_list:

@@ -59,7 +59,7 @@ General workflow guide
 Starting a new workflow requires setting up and testing the pipeline. It starts by opening the pipeline planner. Either you open the Greenotyper app, or opening the GUI through the command line interface:
 
 ```bash
-greenotyper --GUI
+greenotyper GUI
 ```
 
 To open the pipeline planner, click the Pipeline planner button.
@@ -73,7 +73,7 @@ The pipeline can be run on individual images or directories of images. The resul
 To organise the results into a table you can use the command line option:
 
 ```bash
-greenotyper -p mypipeline.pipeline -o input_file.csv output_file.csv
+greenotyper organize-output input_file.csv output_file.csv
 ```
 
 GUI interface guide
@@ -114,57 +114,234 @@ To test the detection of the plant area you can use apply mask function.
 
 Command line interface guide
 ----------------------------
-
-Command line usage help message:
+The commandline is divided into subcommands, which each have their own options.
+The standard help message showing the subcommands are shown here:
 
 ```
-Usage: 
-=========== GREENOTYPER (v0.7.0.dev2) ===========
-greenotyper -i image/directory -p settings.pipeline [options]
+=========== GREENOTYPER (v0.7.0.dev3) ===========
+usage: greenotyper <command> [<args>]
 
-Options:
+The available commands are as follows:
+   run               Runs the greenotyper pipeline on set of images
+   organize-output   Cleans and organizes the output
+   GUI               Opens the Greenotyper GUI interface
+   train-unet        Commandline options for creating and training the U-net
+   test-unet         Test a trained u-net and output segmentation accuracies
+   run-unet          Pipeline settings for running the unet version of the pipeline
+
+Please see the options within each of the commands.
+```
+
+### Run
+The greenotyper run command runs the Greenotyper tool using object detection and thresholding 
+
+```
+=========== GREENOTYPER (v0.7.0.dev3) ===========
+usage: greenotyper run <pipeline file> <input image> [<args>]
+
+Run the Greenotyper pipeline based on the pipeline settings provided.
+
+positional arguments:
+  pipeline              Required pipeline file.
+  input                 Image filename or directory with images
+
+optional arguments:
   -h, --help            show this help message and exit
-  -i IMAGE, --in=IMAGE  Input image or directory of images for inference
-                        (required)
-  -n NETWORK, --network=NETWORK
-                        Input neural network directory (required, if not
-                        provided with pipeline file).
-  -p PIPELINE, --pipeline=PIPELINE
-                        Pipeline file containing all settings
-  -t THREADS, --threads=THREADS
+  -t THREADS, --threads THREADS
                         Number of threads available. Only used to run on
                         multiple images at a time. Default: 1. Settings less
                         than 0 use all available cores.
-  -s SIZEDIRECTORY, --size_output=SIZEDIRECTORY
+  -s SIZE_OUTPUT, --size_output SIZE_OUTPUT
                         Output directory for the size measurements. Default is
                         no output.
-  -g GREENNESSDIRECTORY, --greenness_output=GREENNESSDIRECTORY
+  -g GREENNESS_OUTPUT, --greenness_output GREENNESS_OUTPUT
                         Output directory for the greenness measurements.
                         Default is no output.
-  -m MASKDIRECTORY, --mask_output=MASKDIRECTORY
+  -m MASK_OUTPUT, --mask_output MASK_OUTPUT
                         Output directory for the produced masks. Default is no
                         output.
-  -c CROPDIRECTORY, --crop_output=CROPDIRECTORY
+  -c CROP_OUTPUT, --crop_output CROP_OUTPUT
                         Output directory for the cropped images. Default is no
                         output.
   --by_day              Subdividing the outputs based on per day. Recommended
-                        to avoid file system overflow.
-  --by_individual       Subdividing the outputs based on per individual.
-                        Recommended to avoid file system overflow.
-  --GUI                 Open up the GREENOTYPER GUI.
-  -o ORGANIZEOUTPUT, --organize=ORGANIZEOUTPUT
-                        Organize and clean the output. Usage:
-                        --organize=input_file output_file.   If included only
-                        this action will be performed.
-  --unet=UNET           Whether a UNET should be used to segment the plants.
-                        Input: {unet.hdf5} {preprocess_dir}
-  --unet-preprocess=UNETPRE
-                        Preprocess crops for running in Unet. Provide a
-                        directory to output the preprocessing information.
-  --unet-postprocess=UNETPOST
-                        Postprocess the masks from Unet, and output results.
-                        Provide the {preprocess_dir}.
+                        to use this option or --by_individual to avoid file
+                        system overflow.
+  --by_sample           Subdividing the outputs based on per individual.
+                        Recommended to use this option or --by_day avoid file
+                        system overflow.
 ```
+
+### Organize-output
+Organize-output
+
+```
+=========== GREENOTYPER (v0.7.0.dev3) ===========
+usage: greenotyper organize-output <input> <output> [<args>]
+
+Cleans and organizes the output
+
+positional arguments:
+  input       Input database.*.csv file
+  output      Output .csv file in an organized format
+
+optional arguments:
+  -h, --help  show this help message and exit
+```
+
+### GUI
+To open the user interface you can simply write:
+
+```
+greenotyper GUI
+```
+
+### run-unet
+If the pipeline is to be run using U-net, then run-unet command should be used. The run-unet includes 3 more subcommands, which divide the pipeline into more steps. This was done so that the pipeline can be easily parallized with pre-processing and post-processing can be run seperately using has many processes as possible, and the U-net can be run on a GPU.
+
+```
+=========== GREENOTYPER (v0.7.0.dev3) ===========
+usage: greenotyper run-unet <command> [<args>]
+
+Running U-net is divided into 3 steps:
+   preprocess      Runs the object detection and
+                   saves the crops ready to be run
+                   through the U-net
+   process         Runs U-net on the images.
+                   This can be run on a GUI for
+                   large speed ups.
+   postprocess     Output the results based on
+                   the predicted masks from the U-net
+            
+
+Commands for running the U-net
+
+positional arguments:
+  command     Which run U-net command should be called
+
+optional arguments:
+  -h, --help  show this help message and exit
+```
+
+#### preprocess
+Preprocessing for U-net
+
+```
+=========== GREENOTYPER (v0.7.0.dev3) ===========
+usage: greenotyper run-unet preprocess <pipeline file> <input images> <output directory> [<args>]
+
+Runs the object detection and prepares crops to be run through U-net
+
+positional arguments:
+  pipeline              Required pipeline file.
+  input                 Directory with images
+  outputdir             Output directory where the preprocessed data is saved.
+
+optional arguments:
+  -h, --help            show this help message and exit
+  -t THREADS, --threads THREADS
+                        Number of threads available to be used. Default: 1.
+                        Settings less than 0 use all available cores.
+  -b BATCH_SIZE, --batch-size BATCH_SIZE
+                        Batch size of images run simultaneously. Default is
+                        set to 10. Memory usage can be lower if the batch size
+                        is smaller.
+  --add_subdir ADD_SUBDIR
+                        Provide a directory for a subdirectory which is added
+                        to the output directory
+```
+
+#### process
+
+```
+=========== GREENOTYPER (v0.7.0.dev3) ===========
+usage: greenotyper run-unet process <input dir> <unet>
+
+Process the cropped data and produced predicted masks using U-net.
+
+positional arguments:
+  inputdir    Input directory where batch results from the preprocessing are
+              located.
+  unet        The trained Unet hdf5 file
+
+optional arguments:
+  -h, --help  show this help message and exit
+```
+
+#### postprocess
+
+```
+=========== GREENOTYPER (v0.7.0.dev3) ===========
+usage: greenotyper run-unet postprocess <pipeline file> <inputdir> [<output args>]
+
+Postprocessing of the U-net masks. Outputs the desired information.
+
+positional arguments:
+  pipeline              Pipeline settings file
+  inputdir              Input directory containing processes data
+
+optional arguments:
+  -h, --help            show this help message and exit
+  -t THREADS, --threads THREADS
+                        Number of threads available. Only used to run on
+                        multiple images at a time. Default: 1. Settings less
+                        than 0 use all available cores.
+  -s SIZE_OUTPUT, --size_output SIZE_OUTPUT
+                        Output directory for the size measurements. Default is
+                        no output.
+  -g GREENNESS_OUTPUT, --greenness_output GREENNESS_OUTPUT
+                        Output directory for the greenness measurements.
+                        Default is no output.
+  -m MASK_OUTPUT, --mask_output MASK_OUTPUT
+                        Output directory for the produced masks. Default is no
+                        output.
+  -c CROP_OUTPUT, --crop_output CROP_OUTPUT
+                        Output directory for the cropped images. Default is no
+                        output.
+  --by_day              Subdividing the outputs based on per day. Recommended
+                        to use this option or --by_individual to avoid file
+                        system overflow.
+  --by_sample           Subdividing the outputs based on per individual.
+                        Recommended to use this option or --by_day avoid file
+                        system overflow.
+```
+
+### train-unet
+
+```
+=========== GREENOTYPER (v0.7.0.dev3) ===========
+usage: greenotyper train-unet <training directory> <unet output> [<args>]
+
+Commandline options for creating and training the U-net
+
+positional arguments:
+  training_directory    Directory with training data
+  unet_output           Filename of the trained unet
+
+optional arguments:
+  -h, --help            show this help message and exit
+  --validation_directory VALIDATION_DIRECTORY
+                        Directory with validation data
+  --validation_split VALIDATION_SPLIT
+                        Fraction of the training data used for validation, if
+                        no validation data is provided. Default is 0.2.
+  --epochs EPOCHS       The number of training epochs to be used. Default 20
+                        epochs
+  --augment_data        By default all augmentations will be performed on the
+                        training and validation data
+  --no_flips            Do not perform flips while augmenting the data.
+  --no_rotations        Do not perform rotations while augmenting the data.
+  --no_crops            Do not perform corner crops while augmenting the data.
+  --crop_size CROP_SIZE
+                        The dimension of the crops, the default is 460x460,
+                        input as 460, which is then rescaled to 512x512
+```
+
+### test-unet
+
+```
+
+```
+
 
 Pipeline setup guide
 --------------------
@@ -264,7 +441,7 @@ Training can now be run following the guide [here](https://github.com/tensorflow
 
 To see the evaluation results you use tensorboard, which has been installed with tensorflow.
 
-To export the network you can use the following export_inference_graph.py
+To export the network you can use the following export\_inference\_graph.py
 
 ```
 python export_inference_graph.py \
@@ -277,4 +454,6 @@ python export_inference_graph.py \
 This function outputs the frozen\_inference\_graph.pd. Adding this file together with the label_map.pbtxt into a network directory creates the network input used in Greenotyper.
 
 ### U-net
+
+
 

@@ -1,15 +1,16 @@
 #!/usr/bin/env python
 
 from greenotyperAPI import *
-from optparse import OptionParser
+import argparse
 import os
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 import sys
 from multiprocessing import Pool
 import time
 import traceback
-import tqdm
 import copy
+
+import numpy as np
 from math import ceil, floor
 import numpy as np
 
@@ -23,7 +24,6 @@ def _run_process(arg_call):
     Pipeline.mask_output = output_settings[2]
     Pipeline.crop_output = output_settings[3]
     Pipeline.substructure = output_settings[4]
-    Pipeline.unet_run = output_settings[5]
 
     #sys.stderr.write("### STARTING PROCESS ###\n")
 
@@ -33,25 +33,15 @@ def _run_process(arg_call):
         Pipeline.identify_group()
         Pipeline.color_correction()
 
-        #Pipeline.read_camera_map("camera_map.csv")
-        #Pipeline.read_name_map("round1.csv")
-        Pipeline.crop_and_label_pots_old()
+        return Pipeline.crop_and_label_pots()
     except Exception as e:
         sys.stderr.write("### PROCESS FAILED! ###\n")
         traceback.print_exc()
-
 def _run_image_prepare_process(arg_call):
-    PipelineSettings, input_image, output_settings = arg_call
+    PipelineSettings, input_image = arg_call
 
     Pipeline = GREENOTYPER.Pipeline()
     Pipeline.load_pipeline(PipelineSettings)
-
-    Pipeline.measure_size = output_settings[0]
-    Pipeline.measure_greenness = output_settings[1]
-    Pipeline.mask_output = output_settings[2]
-    Pipeline.crop_output = output_settings[3]
-    Pipeline.substructure = output_settings[4]
-    Pipeline.unet_run = output_settings[5]
 
     try:
         Pipeline.open_image(input_image)
@@ -70,11 +60,8 @@ def _run_image_prepare_process(arg_call):
         sys.stderr.write("### PROCESS FAILED! ###\n")
         traceback.print_exc()
         return None, None
-
 def _output_unet_results_process(arg_calls):
     PipelineSettings, output_settings, image_data_file, mask_data_file, filenames_list = arg_calls
-
-    print(image_data_file)
 
     UnetPipeline = GREENOTYPER.Pipeline()
     UnetPipeline.load_pipeline(PipelineSettings)
@@ -83,7 +70,6 @@ def _output_unet_results_process(arg_calls):
     UnetPipeline.mask_output = copy.copy(output_settings[2])
     UnetPipeline.crop_output = copy.copy(output_settings[3])
     UnetPipeline.substructure = copy.copy(output_settings[4])
-    UnetPipeline.unet_run = copy.copy(output_settings[5])
 
     UnetPipeline.group_identified = True
 
@@ -99,14 +85,12 @@ def _output_unet_results_process(arg_calls):
     except Exception as e:
         sys.stderr.write("### PROCESS FAILED! ###\n")
         traceback.print_exc()
-
 def save_filenames(filename, filenames_list):
     _file = open(filename, "w")
     for name in filenames_list:
         _file.write(name)
         _file.write("\n")
     _file.close()
-
 def read_filenames(filename):
     _file = open(filename)
     filenames = []
@@ -114,157 +98,320 @@ def read_filenames(filename):
         filenames.append(line.strip())
     return filenames
 
+class GreenotyperArgumentCaller(object):
 
-if __name__=="__main__":
-    Pipeline = GREENOTYPER.Pipeline()
-    usage = '''
-\033[32m=========== GREENOTYPER (v{}) ===========\033[39m
-\033[4m%prog\033[24m \033[38;5;202m-i image/directory -p settings.pipeline\033[39m \033[38;5;74m[options]\033[39m'''.format(Pipeline.__version__)
-    parser = OptionParser(usage)
+    def __init__(self):
+        self.Pipeline = GREENOTYPER.Pipeline()
+        print("=========== GREENOTYPER (v{}) ===========".format(self.Pipeline.__version__))
+        parser = argparse.ArgumentParser(
+            description="Greenotyper: Image analysis pipeline for detecting the location of plants on images in a large scale phenotypic experiment and measuring their size and greenness.",
+            usage='''greenotyper <command> [<args>]
 
-    parser.add_option('-i', '--in', type="string", nargs=1, dest="image",
-                      help="Input image or directory of images for inference (required)")
-    parser.add_option('-n', '--network', type="string", nargs=1, dest="network",
-                      help="Input neural network directory (required, if not provided with pipeline file).")
-    parser.add_option('-p', '--pipeline', type="string", nargs=1, dest="pipeline",
-                      help="Pipeline file containing all settings")
-    #parser.add_option('-d', '--draw' type="string", nargs=1, dest="example",
-    #                  help="Whether an example image should be produced. Requires a filename.")
-    parser.add_option('-t', '--threads', type="int", nargs=1, dest="threads", default=1,
-                      help="Number of threads available. Only used to run on multiple images at a time. Default: 1. Settings less than 0 use all available cores.")
-    parser.add_option('-s', '--size_output', type="string", nargs=1, dest="SizeDirectory",
-                      help="Output directory for the size measurements. Default is no output.")
-    parser.add_option('-g', '--greenness_output', type="string", nargs=1, dest="GreennessDirectory",
-                      help="Output directory for the greenness measurements. Default is no output.")
-    parser.add_option('-m', '--mask_output', type="string", nargs=1, dest="MaskDirectory",
-                      help="Output directory for the produced masks. Default is no output.")
-    parser.add_option('-c', '--crop_output', type="string", nargs=1, dest="CropDirectory",
-                      help="Output directory for the cropped images. Default is no output.")
-    parser.add_option('--by_day', action="store_true", dest="by_day",
-                      help="Subdividing the outputs based on per day. Recommended to avoid file system overflow.")
-    parser.add_option('--by_individual', action="store_true", dest="by_sample",
-                      help="Subdividing the outputs based on per individual. Recommended to avoid file system overflow.")
-    parser.add_option('--GUI', action="store_true", dest="gui",
-                      help="Open up the GREENOTYPER GUI.")
-    parser.add_option('-o', '--organize', type="string", nargs=2, dest="OrganizeOutput",
-                      help="Organize and clean the output. Usage: --organize=input_file output_file. \n If included only this action will be performed.")
-    parser.add_option('--unet', type="string", nargs=2, dest="UNET", default=None,
-                      help="Whether a UNET should be used to segment the plants. Input: {unet.hdf5} {preprocess_dir}")
-    parser.add_option('--unet-preprocess', type="string", nargs=1, dest="UNETPre",
-                      default=None, help="Preprocess crops for running in Unet. Provide a directory to output the preprocessing information.")
-    parser.add_option('--unet-postprocess', type="string", nargs=1, dest="UNETPost",
-                      default=None, help="Postprocess the masks from Unet, and output results. Provide the {preprocess_dir}.")
+The available commands are as follows:
+   run               Runs the greenotyper pipeline on set of images
+   organize-output   Cleans and organizes the output
+   GUI               Opens the Greenotyper GUI interface
+   train-unet        Commandline options for creating and training the U-net
+   test-unet         Test a trained u-net and output segmentation accuracies
+   run-unet          Pipeline settings for running the unet version of the pipeline
 
-    options, args = parser.parse_args()
+Please see the options within each of the commands.''')
+        parser.add_argument('command', help='Provide Greenotyper subcommand')
+        args = parser.parse_args(sys.argv[1:2])
+        command = args.command
+        command = command.replace("-","_")
+        if not hasattr(self, command):
+            print("Unrecognized command")
+            parser.print_help()
+            sys.exit(1)
+        getattr(self, command)()
 
-    input_image = options.image
-    network_dir = options.network
-    pipeline = options.pipeline
-    #example_image = options.example
-    threads = options.threads
-    maskdir = options.MaskDirectory
-    cropdir = options.CropDirectory
-    sizedir = options.SizeDirectory
-    greennessdir = options.GreennessDirectory
+    def run(self):
+        import tqdm
+        parser = argparse.ArgumentParser(
+            description="Run the Greenotyper pipeline based on the pipeline settings provided.",
+            usage="greenotyper run <pipeline file> <input image> [<args>]"
+        )
+        parser.add_argument('pipeline', help="Pipeline settings file")
+        parser.add_argument('input', help="Image filename or directory with images")
+        parser.add_argument('-t', '--threads', type=int, default=1,
+                            help="Number of threads available. Only used to run on multiple images at a time. Default: 1. Settings less than 0 use all available cores.")
+        parser.add_argument('-s', '--size_output',
+                            help="Output directory for the size measurements. Default is no output.")
+        parser.add_argument('-g', '--greenness_output',
+                            help="Output directory for the greenness measurements. Default is no output.")
+        parser.add_argument('-m', '--mask_output',
+                            help="Output directory for the produced masks. Default is no output.")
+        parser.add_argument('-c', '--crop_output',
+                            help="Output directory for the cropped images. Default is no output.")
+        parser.add_argument('--by_day', action="store_true",
+                            help="Subdividing the outputs based on per day. Recommended to use this option or --by_individual to avoid file system overflow.")
+        parser.add_argument('--by_sample', action="store_true",
+                            help="Subdividing the outputs based on per individual. Recommended to use this option or --by_day avoid file system overflow.")
+        args = parser.parse_args(sys.argv[2:])
 
-    if options.gui:
-        from greenotyperAPI.GUI.PipelineRunner import *
+        PipelineSettings = GREENOTYPER.pipeline_settings()
+        PipelineSettings.read(args.pipeline)
+
+        self.Pipeline.load_pipeline(PipelineSettings)
+
+        if os.path.isdir(args.input):
+            input_images = self.Pipeline.scan_directory(args.input)
+        else:
+            input_images = [args.input]
+
+        output_settings = []
+        if args.size_output is None: output_settings.append((False, ""))
+        else: output_settings.append((True, args.size_output))
+        if args.greenness_output is None: output_settings.append((False, ""))
+        else: output_settings.append((True, args.greenness_output))
+        if args.mask_output is None: output_settings.append((False, ""))
+        else: output_settings.append((True, args.mask_output))
+        if args.crop_output is None: output_settings.append((False, ""))
+        else: output_settings.append((True, args.crop_output))
+        if args.by_day: output_settings.append((True, "Time"))
+        elif args.by_sample: output_settings.append((True, "Sample"))
+        else: output_settings.append((False, ""))
+
+        arg_calls = []
+        for input_image in input_images:
+            arg_calls.append((PipelineSettings, input_image, output_settings))
+
+        pool = Pool(processes=args.threads)
+        mapped_values = list(tqdm.tqdm(pool.imap_unordered(_run_process, arg_calls), total=len(arg_calls)))
+
+        for message in mapped_values:
+            if message is None: continue
+            print(message)
+
+    def organize_output(self):
+        parser = argparse.ArgumentParser(
+            description="Cleans and organizes the output",
+            usage="greenotyper organize-output <input> <output> [<args>]"
+        )
+        parser.add_argument("input", help="Input database.*.csv file")
+        parser.add_argument("output", help="Output .csv file in an organized format")
+        args = parser.parse_args(sys.argv[2:])
+
+        if "greenness" in args.input:
+            Pipeline.greenness_output(args.input, args.output)
+            sys.exit()
+        else:
+            Pipeline.organize_output(args.input, args.output)
+
+    def GUI(self):
+        from PyQt5.QtWidgets import QApplication
+        import PyQt5.QtGui as QtGui
+        from greenotyperAPI.GUI.PipelineRunner import PipelineRunner
         app = QApplication([])
         app.setApplicationName("GREENOTYPER")
         scriptDir = os.path.dirname(os.path.realpath(__file__))
-        #app.setWindowIcon(QtGui.QIcon(scriptDir + os.path.sep + 'icon/icon.png'))
         app.setWindowIcon(QtGui.QIcon(os.path.join(sys.prefix,'icon.png')))
         mainwindow = PipelineRunner()
-        #mainwindow.windowicon = QtGui.QIcon(scriptDir + os.path.sep + 'icon/icon.png')
         mainwindow.windowicon = QtGui.QIcon(os.path.join(sys.prefix,'icon.png'))
         mainwindow.show()
         sys.exit(app.exec_())
 
-    PipelineSettings = GREENOTYPER.pipeline_settings()
-    #Pipeline = GRAPE.Pipeline()
+    def train_unet(self):
+        parser = argparse.ArgumentParser(
+            description="Commandline options for creating and training the U-net",
+            usage="greenotyper train-unet <training directory> <unet output> [<args>]"
+        )
+        parser.add_argument("training_directory", help="Directory with training data")
+        parser.add_argument("unet_output", help="Filename of the trained unet")
+        parser.add_argument("--validation_directory",
+                            help="Directory with validation data")
+        parser.add_argument("--validation_split", type=float, default=0.2,
+                            help="Fraction of the training data used for validation, if no validation data is provided. Default is 0.2.")
+        parser.add_argument("--epochs", type=int, default=20,
+                            help="The number of training epochs to be used. Default 20 epochs")
+        parser.add_argument("--augment_data", action="store_true",
+                            help="By default all augmentations will be performed on the training and validation data")
+        parser.add_argument("--no_flips", action="store_true",
+                            help="Do not perform flips while augmenting the data.")
+        parser.add_argument("--no_rotations", action="store_true",
+                            help="Do not perform rotations while augmenting the data.")
+        parser.add_argument("--no_crops", action="store_true",
+                            help="Do not perform corner crops while augmenting the data.")
+        parser.add_argument("--crop_size", type=int, default=460,
+                            help="The dimension of the crops, the default is 460x460, input as 460, which is then rescaled to 512x512")
+        args = parser.parse_args(sys.argv[2:])
 
-    if pipeline is None:
-        Warning("No pipeline settings provided. Will use default settings")
-    else:
-        PipelineSettings.read(pipeline)
+        traindata, labeldata, filenames = self.Pipeline.load_train_data(args.training_directory)
 
-    Pipeline.load_pipeline(PipelineSettings)
+        if args.augment_data:
+            traindata, labeldata = self.Pipeline.augment_data(traindata, labeldata,
+                                                              not args.no_flips,
+                                                              not args.no_rotations,
+                                                              not args.no_crops,
+                                                              (args.crop_size, args.crop_size))
 
-    if options.OrganizeOutput:
-        filename, output_file = options.OrganizeOutput
-        if "greenness.csv" in filename:
-            Pipeline.greenness_output(filename, output_file)
-            sys.exit()
+        Unet = self.Pipeline.Unet(traindata, labeldata)
+        if args.validation_directory:
+            valdata, vallabeldata, filenames = self.Pipeline.load_train_data(args.validation_directory)
+
+            if args.augment_data:
+                valdata, vallabeldata = self.Pipeline.augment_data(valdata, vallabeldata,
+                                                                  not args.no_flips,
+                                                                  not args.no_rotations,
+                                                                  not args.no_crops,
+                                                                  (args.crop_size, args_crop_size))
+
+            Unet.train(args.unet_output, validation_img=valdata, validation_labels=vallabeldata, epochs=args.epochs)
         else:
-            Pipeline.organize_output(filename, output_file)
-            sys.exit()
+            Unet.train(args.unet_output, validation_split=args.validation_split, epochs=args.epochs)
 
-    if (not hasattr(Pipeline, "detection_graph")) and (not hasattr(Pipeline, "label_map")):
-        if network_dir is None:
-            raise GREENOTYPER.ArgumentError("No network directory provided or available in pipeline settings. Use -n directory, or -h to see the help message\n Consider adding the network to a pipeline file using the PipelinePlanner")
+    def test_unet(self):
+        parser = argparse.ArgumentParser(
+            description="Test a trained U-net and get segmentation accuracy of the model",
+            usage="greenotyper test-unet <testing directory> <trained unet>"
+        )
+        parser.add_argument("testing_directory", help="Directory with images and labelled ground truth images")
+        parser.add_argument("trained_unet", help="Filename of trained u-net model (.hdf5 format)")
+        parser.add_argument("--output_masks", nargs=1,
+                            help="Output predicted masks to the provided directory")
+        parser.add_argument("--ap_iou_threshold", nargs=1, type=float, default=0.5,
+                            help="Set the IoU threshold used for the PASCAL VOC AP. Default is 0.5")
+        args = parser.parse_args(sys.argv[2:])
+
+        testdata, ground_truth_data, filenames = self.Pipeline.load_train_data(args.testing_directory)
+
+        if args.output_masks:
+            if not os.isdir(args.output_masks):
+                raise "--output_masks error. Please provide a directory to output the masks to."
+
+        self.Pipeline.load_unet(args.trained_unet)
+
+
+        predicted = self.Pipeline.unet_apply_on_images(testdata)
+
+        predicted[predicted>=0.5] = 1
+        predicted[predicted<0.5] = 0
+
+        iou_scores = []
+        pixel_accs = []
+        recalls = []
+        precisions = []
+        dice_coef = []
+        f1_scores = []
+
+        for filename, i in zip(filenames, range(predicted.shape[0])):
+            mask = np.zeros(predicted[i].shape)
+            mask = predicted[i]
+            mask = mask.reshape(predicted[i].shape[:2])
+
+            ground_truth = ground_truth_data[i].reshape(predicted[i].shape[:2])
+
+            if ground_truth.sum()==0:
+                print("{}, ground truth was empty and will be skipped.".format(filename))
+                continue
+
+            iou_scores.append(self.Pipeline._iou_score(ground_truth, mask))
+            pixel_accs.append(self.Pipeline._pixel_accuracy(ground_truth, mask))
+            recalls.append(self.Pipeline._recall(ground_truth, mask))
+            precisions.append(self.Pipeline._precision(ground_truth, mask))
+            dice_coef.append(self.Pipeline._dice_coefficient(ground_truth, mask))
+            f1_scores.append(self.Pipeline._f1_score(ground_truth, mask))
+
+            if args.output_masks:
+                pass
+            #output_mask = np.zeros(results[i].shape[])
+
+        AP = self.Pipeline._PASCAL_VOC_AP(precisions, recalls, iou_scores, IoU=args.ap_iou_threshold)
+        iou_scores = np.array(iou_scores)
+        pixel_accs = np.array(pixel_accs)
+        recalls = np.array(recalls)
+        precisions = np.array(precisions)
+        dice_coef = np.array(dice_coef)
+        f1_scores = np.array(f1_scores)
+
+        print()
+        print("=========================================")
+        print("========= Segmentation measures =========")
+        print("=========================================")
+        print("{0:>35} {1:.3f}".format("Mean Intersection over Union (IoU):",iou_scores.mean()))
+        print("{0:>35} {1:.3f}".format("Mean Pixel accuracy:", pixel_accs.mean()))
+        print("{0:>35} {1:.3f}".format("Mean Precision:", precisions.mean()))
+        print("{0:>35} {1:.3f}".format("Mean Recall:", recalls.mean()))
+        print("{0:>35} {1:.3f}".format("Mean Dice coefficent:", dice_coef.mean()))
+        print("{0:>35} {1:.3f}".format("Mean F1 score:", f1_scores.mean()))
+        print("{0:>35} {1:.3f}".format("Mean PASCAL VOC AP[{0:.2f}@IoU]:".format(args.ap_iou_threshold), AP))
+
+    def run_unet(self):
+        parser = argparse.ArgumentParser(
+            description="Commands for running the U-net ",
+            usage='''greenotyper run-unet <command> [<args>]
+
+Running U-net is divided into 3 steps:
+   preprocess      Runs the object detection and
+                   saves the crops ready to be run
+                   through the U-net
+   process         Runs U-net on the images.
+                   This can be run on a GUI for
+                   large speed ups.
+   postprocess     Output the results based on
+                   the predicted masks from the U-net
+            '''
+        )
+        parser.add_argument('command', help="Which run-unet command should be called")
+        args = parser.parse_args(sys.argv[2:3])
+        command = "_unet_"+args.command
+        if not hasattr(self, command):
+            print("Unrecognized command")
+            parser.print_help()
+            sys.exit(1)
+
+        getattr(self, command)()
+
+    def _unet_preprocess(self):
+        import tqdm
+        parser = argparse.ArgumentParser(
+            description="Runs the object detection and prepares crops to be run through U-net",
+            usage="greenotyper run-unet preprocess <pipeline file> <input images> <output directory> [<args>]"
+        )
+        parser.add_argument('pipeline', help="Pipeline settings file")
+        parser.add_argument('input', help="Directory with images")
+        parser.add_argument('outputdir', help="Output directory where the preprocessed data is saved.")
+        parser.add_argument('-t', '--threads', type=int,
+                            help="Number of threads available to be used. Default: 1. Settings less than 0 use all available cores.")
+        parser.add_argument('-b', '--batch-size', type=int, default=10,
+                            help="Batch size of images run simultaneously. Default is set to 10. Memory usage can be lower if the batch size is smaller.")
+        parser.add_argument('--add_subdir',
+                            help="Provide a directory for a subdirectory which is added to the output directory")
+        args = parser.parse_args(sys.argv[3:])
+
+        PipelineSettings = GREENOTYPER.pipeline_settings()
+        PipelineSettings.read(args.pipeline)
+
+        if os.path.isdir(args.input):
+            input_images = self.Pipeline.scan_directory(args.input)
         else:
-            if os.path.isdir(network_dir):
-                files = os.listdir(network_dir)
-                graph = os.path.join(network_dir,next(filter(lambda x: ".pb" in x and "txt" not in x, files)))
-                label = os.path.join(network_dir,next(filter(lambda x: ".pbtxt" in x, files)))
+            raise "Please provide a directory with images. It is not recommended to run with a single image."
 
-    if input_image is None:
-        raise GREENOTYPER.ArgumentError("No input image provided. Use -i filename, or -h to see the help message")
+        arg_calls = []
+        for input_image in input_images:
+            arg_calls.append((PipelineSettings, input_image))
 
-    if os.path.isdir(input_image):
-        input_images = Pipeline.scan_directory(input_image)
-    else:
-        input_images = [input_image]
+        if args.add_subdir:
+            output_dir = os.path.join(args.outputdir, args.add_subdir)
+            if not os.path.isdir(output_dir):
+                os.mkdir(output_dir)
+        else:
+            output_dir = args.outputdir
 
-    output_settings = []
-    if sizedir is None: output_settings.append((False, ""))
-    else: output_settings.append((True, sizedir))
-    if greennessdir is None: output_settings.append((False, ""))
-    else: output_settings.append((True, greennessdir))
-    if maskdir is None: output_settings.append((False, ""))
-    else: output_settings.append((True, maskdir))
-    if cropdir is None: output_settings.append((False, ""))
-    else: output_settings.append((True, cropdir))
-    if options.by_day: output_settings.append((True, "Time"))
-    elif options.by_sample: output_settings.append((True, "Sample"))
-    else: output_settings.append((False, ""))
-    if options.UNET is None:
-        output_settings.append((False, ""))
-    else:
-        output_settings.append((True, options.UNET[0]))
-
-    arg_calls = []
-    for input_image in input_images:
-        arg_calls.append((PipelineSettings, input_image, output_settings))
-
-
-    if options.UNET is None and options.UNETPre is None and options.UNETPost is None:
-        pool = Pool(processes=threads)
-        mapped_values = list(tqdm.tqdm(pool.imap_unordered(_run_process, arg_calls), total=len(arg_calls)))
-
-    if options.UNETPre:
-        preprocess_directory = options.UNETPre
-        input_name = options.image.split("/")[-1]
-
-        output_dir = os.path.join(preprocess_directory, input_name)
-
-        if not os.path.isdir(output_dir):
-            os.mkdir(output_dir)
-
-        batch_size = 10
+        batch_size = args.batch_size
         batches = ceil(len(arg_calls)/batch_size)
         for i in range(batches):
-            pool = Pool(processes=threads)
+            pool = Pool(processes=args.threads)
             print("STARTING BATCH {} out of {}".format(i+1, batches))
-            print("\tRUNNING OBJECT DETECTION")
-            image_data = pool.map(_run_image_prepare_process, arg_calls[i*batch_size:(i+1)*batch_size])
+            image_data = list(tqdm.tqdm(pool.imap_unordered(_run_image_prepare_process, arg_calls[i*batch_size:(i+1)*batch_size]), total=batch_size))
 
             pool.close()
             pool.terminate()
             pool.join()
 
             if image_data is None: continue
-            image_data, filenames_list = Pipeline.unet_join_image_data(image_data)
+            image_data, filenames_list = self.Pipeline.unet_join_image_data(image_data)
 
             if image_data is None: continue
 
@@ -273,54 +420,91 @@ if __name__=="__main__":
 
             del image_data
 
-        sys.exit()
+    def _unet_process(self):
+        parser = argparse.ArgumentParser(
+            description="Process the cropped data and produced predicted masks using U-net.",
+            usage="greenotyper run-unet process <input dir> <unet>"
+        )
+        parser.add_argument('inputdir', help="Input directory where batch results from the preprocessing are located.")
+        parser.add_argument('unet', help="The trained Unet hdf5 file")
+        args = parser.parse_args(sys.argv[3:])
 
-    if options.UNET:
         UnetPipeline = GREENOTYPER.Pipeline()
-        UnetPipeline.load_pipeline(PipelineSettings)
-        UnetPipeline.measure_size = output_settings[0]
-        UnetPipeline.measure_greenness = output_settings[1]
-        UnetPipeline.mask_output = output_settings[2]
-        UnetPipeline.crop_output = output_settings[3]
-        UnetPipeline.substructure = output_settings[4]
-        UnetPipeline.unet_run = output_settings[5]
+        #UnetPipeline.load_pipeline(PipelineSettings)
 
-        unet_file, preprocess_dir = options.UNET
-
-        UnetPipeline.load_unet(unet_file)
+        UnetPipeline.load_unet(args.unet)
 
         batch_names = set()
-        for files in os.listdir(preprocess_dir):
-            batch_names.add(files.split(".")[0])
+        for filename in os.listdir(args.inputdir):
+            if "batch" in filename:
+                batch_names.add(filename.split(".")[0])
 
-        unet_calls = []
         for batch in batch_names:
-            print(batch)
-            image_data_file = os.path.join(preprocess_dir,batch+".npy")
-            output_filename = os.path.join(preprocess_dir,batch+".mask.npy")
+            print("Running U-net on {}".format(batch))
+            image_data_file = os.path.join(args.inputdir,batch+".npy")
+            output_filename = os.path.join(args.inputdir,batch+".mask.npy")
 
             images = np.load(image_data_file)
             predicted_masks = UnetPipeline.unet_apply_on_images(images)
             np.save(output_filename, predicted_masks)
 
-    if options.UNETPost:
-        pool = Pool(processes=threads)
+    def _unet_postprocess(self):
+        import tqdm
+        parser = argparse.ArgumentParser(
+            description="Postprocessing of the U-net masks. Outputs the desired information.",
+            usage="greenotyper run-unet postprocess <pipeline file> <inputdir> [<output args>]"
+        )
+        parser.add_argument("pipeline", help="Pipeline settings file")
+        parser.add_argument("inputdir", help="Input directory containing processes data")
+        parser.add_argument('-t', '--threads', type=int, default=1,
+                            help="Number of threads available. Only used to run on multiple images at a time. Default: 1. Settings less than 0 use all available cores.")
+        parser.add_argument('-s', '--size_output',
+                            help="Output directory for the size measurements. Default is no output.")
+        parser.add_argument('-g', '--greenness_output',
+                            help="Output directory for the greenness measurements. Default is no output.")
+        parser.add_argument('-m', '--mask_output',
+                            help="Output directory for the produced masks. Default is no output.")
+        parser.add_argument('-c', '--crop_output',
+                            help="Output directory for the cropped images. Default is no output.")
+        parser.add_argument('--by_day', action="store_true",
+                            help="Subdividing the outputs based on per day. Recommended to use this option or --by_individual to avoid file system overflow.")
+        parser.add_argument('--by_sample', action="store_true",
+                            help="Subdividing the outputs based on per individual. Recommended to use this option or --by_day avoid file system overflow.")
+        args = parser.parse_args(sys.argv[3:])
 
-        preprocess_dir = options.UNETPost
+        PipelineSettings = GREENOTYPER.pipeline_settings()
+        PipelineSettings.read(args.pipeline)
+
+        output_settings = []
+        if args.size_output is None: output_settings.append((False, ""))
+        else: output_settings.append((True, args.size_output))
+        if args.greenness_output is None: output_settings.append((False, ""))
+        else: output_settings.append((True, args.greenness_output))
+        if args.mask_output is None: output_settings.append((False, ""))
+        else: output_settings.append((True, args.mask_output))
+        if args.crop_output is None: output_settings.append((False, ""))
+        else: output_settings.append((True, args.crop_output))
+        if args.by_day: output_settings.append((True, "Time"))
+        elif args.by_sample: output_settings.append((True, "Sample"))
+        else: output_settings.append((False, ""))
+
+        pool = Pool(processes=args.threads)
 
         batch_names = set()
-        for files in os.listdir(preprocess_dir):
-            batch_names.add(files.split(".")[0])
+        for filename in os.listdir(args.inputdir):
+            if "batch" in filename:
+                batch_names.add(filename.split(".")[0])
 
         arg_calls = []
         for batch in batch_names:
             arg_calls.append((PipelineSettings, output_settings,
-                               os.path.join(preprocess_dir,batch+".npy"),
-                               os.path.join(preprocess_dir,batch+".mask.npy"),
-                               os.path.join(preprocess_dir,batch+".names")))
+                              os.path.join(args.inputdir,batch+".npy"),
+                              os.path.join(args.inputdir,batch+".mask.npy"),
+                              os.path.join(args.inputdir,batch+".names")))
 
-        pool.map(_output_unet_results_process, arg_calls)
+        list(tqdm.tqdm(pool.imap_unordered(_output_unet_results_process, arg_calls), total=len(arg_calls)))
 
-        pool.close()
-        pool.terminate()
-        pool.join()
+
+
+if __name__=="__main__":
+    GreenotyperArgumentCaller()
