@@ -763,6 +763,7 @@ class Pipeline:
         for i, output_name in enumerate(filenames):
             name = output_name.split("/")[-1].split("_")[0]
             timestamp = output_name.split("_")[-1]
+            time_dir = self._format_time(timestamp, "%YY%mM%dD")
             mini_img = (images[i]*255).astype(np.uint8)
             mini_mask = predicted_masks[i].reshape((512,512))
 
@@ -778,14 +779,14 @@ class Pipeline:
                     output_name = os.path.join(name,output_name)
                 if self.substructure[1]=="Time":
                     for active_dir in self._get_active_dirs():
-                        new_dir = os.path.join(active_dir, timestamp)
+                        new_dir = os.path.join(active_dir, time_dir)
                         #print(new_dir)
                         if not os.path.isdir(new_dir):
                             try:
                                 os.mkdir(new_dir)
                             except:
                                 pass
-                    output_name = os.path.join(timestamp,output_name)
+                    output_name = os.path.join(time_dir,output_name)
 
             if self.measure_size[0]:
                 size = str(int(mini_mask.sum()))

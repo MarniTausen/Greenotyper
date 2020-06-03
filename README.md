@@ -1,4 +1,4 @@
-Greenotyper (v0.7.0.dev2)
+Greenotyper (v0.7.0.dev3)
 ================
 [![Build Status](https://api.travis-ci.com/MarniTausen/Greenotyper.svg?branch=master)](https://travis-ci.com/MarniTausen/Greenotyper)[![codecov](https://codecov.io/gh/MarniTausen/Greenotyper/branch/master/graph/badge.svg)](https://codecov.io/gh/MarniTausen/Greenotyper)[![PyPI version](https://badge.fury.io/py/greenotyper.svg)](https://badge.fury.io/py/greenotyper)
 
@@ -307,6 +307,8 @@ optional arguments:
 
 ### train-unet
 
+Commandline options for training a U-net
+
 ```
 =========== GREENOTYPER (v0.7.0.dev3) ===========
 usage: greenotyper train-unet <training directory> <unet output> [<args>]
@@ -338,8 +340,25 @@ optional arguments:
 
 ### test-unet
 
-```
+Commandline options for testing the segmentation accuracy of a trained U-net
 
+```
+=========== GREENOTYPER (v0.7.0.dev3) ===========
+usage: greenotyper test-unet <testing directory> <trained unet>
+
+Test a trained U-net and get segmentation accuracy of the model
+
+positional arguments:
+  testing_directory     Directory with images and labelled ground truth images
+  trained_unet          Filename of trained u-net model (.hdf5 format)
+
+optional arguments:
+  -h, --help            show this help message and exit
+  --output_masks OUTPUT_MASKS
+                        Output predicted masks to the provided directory
+  --ap_iou_threshold AP_IOU_THRESHOLD
+                        Set the IoU threshold used for the PASCAL VOC AP.
+                        Default is 0.5
 ```
 
 
@@ -455,5 +474,100 @@ This function outputs the frozen\_inference\_graph.pd. Adding this file together
 
 ### U-net
 
+#### Ground truth data
 
+To train a U-net a ground truth dataset must be created. Here is an example of what the training data should look like to the inputted data.
+
+Cropped Image | Ground truth mask
+:-------------:|:----------------:
+![](training_data/u-net/train/image/40.jpg)|![](training_data/u-net/train/label/40.jpg)
+
+The Cropped Image should be a square image and preferrably a resolution which is a multiple of 2, so (512x512) or (1024x1024). (512x512) was used in our case. The ground truth mask should be a black and white jpeg. The background is white and the mask is black.
+
+The quality of the segmentation that U-net will be capable of performing will depend on the quality of the ground truth masks produced.
+
+The ground truth dataset should be divided into 3 parts. Training, validation and testing. Validation is not mandatory, since you can set a validation split, which means that a fraction of the training data will be used as validation during training. 
+In the study 50 ground truth images were produced, 10 were used for testing, 40 taken for training. 20% of the training data was used for validation, so 8 images were taken out, leaving 32 images in the training dataset.
+
+For storing and inputting the data the images and ground truth should be stored in the image and label directories respectively. The directories are used as the input to the functions. Cropped images and their respective mask should have the exact same name. Please use the follow structure of directories:
+
+```
+- train
+	- image
+	- label
+- validation
+	- image
+	- label
+- test
+	- image
+	- label
+```
+
+#### Training the U-net
+The options the train-unet command.
+
+```
+=========== GREENOTYPER (v0.7.0.dev3) ===========
+usage: greenotyper train-unet <training directory> <unet output> [<args>]
+
+Commandline options for creating and training the U-net
+
+positional arguments:
+  training_directory    Directory with training data
+  unet_output           Filename of the trained unet
+
+optional arguments:
+  -h, --help            show this help message and exit
+  --validation_directory VALIDATION_DIRECTORY
+                        Directory with validation data
+  --validation_split VALIDATION_SPLIT
+                        Fraction of the training data used for validation, if
+                        no validation data is provided. Default is 0.2.
+  --epochs EPOCHS       The number of training epochs to be used. Default 20
+                        epochs
+  --augment_data        By default all augmentations will be performed on the
+                        training and validation data
+  --no_flips            Do not perform flips while augmenting the data.
+  --no_rotations        Do not perform rotations while augmenting the data.
+  --no_crops            Do not perform corner crops while augmenting the data.
+  --crop_size CROP_SIZE
+                        The dimension of the crops, the default is 460x460,
+                        input as 460, which is then rescaled to 512x512
+```
+
+The command expects the training directory which contains the image and label directories, and the filename of the output unet. The currently best network during training will be saved to this filename.
+
+The validation data can be provided with the --validation\_directory command. If this is not provided it will automatically use --validation\_split 0.2, and take 20% of the training data randomly as validation.
+
+The number of training epochs can be set using the --epochs command. 1 epoch corresponds 1 full run through all of the training data. The default is set to 20 epochs, after this the network will start to overfit to the data. With more data available more epochs can be used before overfitting starts. By overfitting  it means that the training accuracy continues to increase while the validation accuracy will decrease.
+
+Finally augmentation options are available. Using --augment\_data the training and validation data will be augmented to artificially increase the dataset sizes. By default it includes all of the augmentations available; flips, rotations and crops. Using all of the data will increase the datasets 40 fold. To disable any augmentation simply use --no\_nameofaugmentation. To change the cropping size you can use --crop\_size, by default it is set to 460. Which means it takes 4 crops from each corner of size 460x460 and rescales the crop back to 512x512. Avoid using crop size difference which are to large to avoid artifacts from rescaling.
+
+#### Testing the U-net
+Options for testing the trained U-net
+
+```
+=========== GREENOTYPER (v0.7.0.dev3) ===========
+usage: greenotyper test-unet <testing directory> <trained unet>
+
+Test a trained U-net and get segmentation accuracy of the model
+
+positional arguments:
+  testing_directory     Directory with images and labelled ground truth images
+  trained_unet          Filename of trained u-net model (.hdf5 format)
+
+optional arguments:
+  -h, --help            show this help message and exit
+  --output_masks OUTPUT_MASKS
+                        Output predicted masks to the provided directory
+  --ap_iou_threshold AP_IOU_THRESHOLD
+                        Set the IoU threshold used for the PASCAL VOC AP.
+                        Default is 0.5
+```
+
+Subcommand test-unet takes 2 main arguments the directory with the testing data, and the trained unet. It will calculate all of the segmentation accuracies implemented and print a report. The segmentation accuracies implemented are Jaccard Index (Intersection Over Union), Dice coefficient, Recall, Precision, Pixel Accuracy, F1 score and the PASCAL VOC AP or Average Precision over Recall.
+
+The --ap\_iou\_threshold option allows to change was the IoU (Intersection over Union) threshold used for the PASCAL VOC AP measure is. By default it is 0.5, which means if a mask has an IoU less than 0.5 it will be removed.
+
+The --output\_masks option can output the predicted masks used for the segmentation accuracies. The option expects a directory where it can write the output masks.
 
