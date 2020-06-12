@@ -1,4 +1,4 @@
-Greenotyper (v0.7.0.dev3)
+Greenotyper (v0.7.0.rc1)
 ================
 [![Build Status](https://api.travis-ci.com/MarniTausen/Greenotyper.svg?branch=master)](https://travis-ci.com/MarniTausen/Greenotyper)[![codecov](https://codecov.io/gh/MarniTausen/Greenotyper/branch/master/graph/badge.svg)](https://codecov.io/gh/MarniTausen/Greenotyper)[![PyPI version](https://badge.fury.io/py/greenotyper.svg)](https://badge.fury.io/py/greenotyper)
 
@@ -118,7 +118,7 @@ The commandline is divided into subcommands, which each have their own options.
 The standard help message showing the subcommands are shown here:
 
 ```
-=========== GREENOTYPER (v0.7.0.dev3) ===========
+=========== GREENOTYPER (v0.7.0.rc1) ===========
 usage: greenotyper <command> [<args>]
 
 The available commands are as follows:
@@ -136,7 +136,7 @@ Please see the options within each of the commands.
 The greenotyper run command runs the Greenotyper tool using object detection and thresholding 
 
 ```
-=========== GREENOTYPER (v0.7.0.dev3) ===========
+=========== GREENOTYPER (v0.7.0.rc1) ===========
 usage: greenotyper run <pipeline file> <input image> [<args>]
 
 Run the Greenotyper pipeline based on the pipeline settings provided.
@@ -175,7 +175,7 @@ optional arguments:
 Organize-output
 
 ```
-=========== GREENOTYPER (v0.7.0.dev3) ===========
+=========== GREENOTYPER (v0.7.0.rc1) ===========
 usage: greenotyper organize-output <input> <output> [<args>]
 
 Cleans and organizes the output
@@ -199,7 +199,7 @@ greenotyper GUI
 If the pipeline is to be run using U-net, then run-unet command should be used. The run-unet includes 3 more subcommands, which divide the pipeline into more steps. This was done so that the pipeline can be easily parallized with pre-processing and post-processing can be run seperately using has many processes as possible, and the U-net can be run on a GPU.
 
 ```
-=========== GREENOTYPER (v0.7.0.dev3) ===========
+=========== GREENOTYPER (v0.7.0.rc1) ===========
 usage: greenotyper run-unet <command> [<args>]
 
 Running U-net is divided into 3 steps:
@@ -226,7 +226,7 @@ optional arguments:
 Preprocessing for U-net
 
 ```
-=========== GREENOTYPER (v0.7.0.dev3) ===========
+=========== GREENOTYPER (v0.7.0.rc1) ===========
 usage: greenotyper run-unet preprocess <pipeline file> <input images> <output directory> [<args>]
 
 Runs the object detection and prepares crops to be run through U-net
@@ -253,7 +253,7 @@ optional arguments:
 #### process
 
 ```
-=========== GREENOTYPER (v0.7.0.dev3) ===========
+=========== GREENOTYPER (v0.7.0.rc1) ===========
 usage: greenotyper run-unet process <input dir> <unet>
 
 Process the cropped data and produced predicted masks using U-net.
@@ -270,7 +270,7 @@ optional arguments:
 #### postprocess
 
 ```
-=========== GREENOTYPER (v0.7.0.dev3) ===========
+=========== GREENOTYPER (v0.7.0.rc1) ===========
 usage: greenotyper run-unet postprocess <pipeline file> <inputdir> [<output args>]
 
 Postprocessing of the U-net masks. Outputs the desired information.
@@ -310,7 +310,7 @@ optional arguments:
 Commandline options for training a U-net
 
 ```
-=========== GREENOTYPER (v0.7.0.dev3) ===========
+=========== GREENOTYPER (v0.7.0.rc1) ===========
 usage: greenotyper train-unet <training directory> <unet output> [<args>]
 
 Commandline options for creating and training the U-net
@@ -343,7 +343,7 @@ optional arguments:
 Commandline options for testing the segmentation accuracy of a trained U-net
 
 ```
-=========== GREENOTYPER (v0.7.0.dev3) ===========
+=========== GREENOTYPER (v0.7.0.rc1) ===========
 usage: greenotyper test-unet <testing directory> <trained unet>
 
 Test a trained U-net and get segmentation accuracy of the model
@@ -507,7 +507,7 @@ For storing and inputting the data the images and ground truth should be stored 
 The options the train-unet command.
 
 ```
-=========== GREENOTYPER (v0.7.0.dev3) ===========
+=========== GREENOTYPER (v0.7.0.rc1) ===========
 usage: greenotyper train-unet <training directory> <unet output> [<args>]
 
 Commandline options for creating and training the U-net
@@ -547,7 +547,7 @@ Finally augmentation options are available. Using --augment\_data the training a
 Options for testing the trained U-net
 
 ```
-=========== GREENOTYPER (v0.7.0.dev3) ===========
+=========== GREENOTYPER (v0.7.0.rc1) ===========
 usage: greenotyper test-unet <testing directory> <trained unet>
 
 Test a trained U-net and get segmentation accuracy of the model
@@ -570,4 +570,6 @@ Subcommand test-unet takes 2 main arguments the directory with the testing data,
 The --ap\_iou\_threshold option allows to change was the IoU (Intersection over Union) threshold used for the PASCAL VOC AP measure is. By default it is 0.5, which means if a mask has an IoU less than 0.5 it will be removed.
 
 The --output\_masks option can output the predicted masks used for the segmentation accuracies. The option expects a directory where it can write the output masks.
+
+If the U-net gets high segmentation accuracies, then it is ready for being used in the analysis.
 

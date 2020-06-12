@@ -98,7 +98,7 @@ class pipeline_settings:
 class Pipeline:
 
     def __get_version__(self):
-        self.__version__ = "0.7.0.dev3"
+        self.__version__ = "0.7.0.rc1"
         return self.__version__
 
     ## Initialization codes and file reading

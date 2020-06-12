@@ -13,6 +13,9 @@ import copy
 import numpy as np
 from math import ceil, floor
 import numpy as np
+from skimage import io
+from skimage.transform import resize
+from PIL import Image
 
 def _run_process(arg_call):
     PipelineSettings, input_image, output_settings = arg_call
@@ -268,20 +271,19 @@ Please see the options within each of the commands.''')
         )
         parser.add_argument("testing_directory", help="Directory with images and labelled ground truth images")
         parser.add_argument("trained_unet", help="Filename of trained u-net model (.hdf5 format)")
-        parser.add_argument("--output_masks", nargs=1,
+        parser.add_argument("--output_masks",
                             help="Output predicted masks to the provided directory")
-        parser.add_argument("--ap_iou_threshold", nargs=1, type=float, default=0.5,
+        parser.add_argument("--ap_iou_threshold", type=float, default=0.5,
                             help="Set the IoU threshold used for the PASCAL VOC AP. Default is 0.5")
         args = parser.parse_args(sys.argv[2:])
 
         testdata, ground_truth_data, filenames = self.Pipeline.load_train_data(args.testing_directory)
 
         if args.output_masks:
-            if not os.isdir(args.output_masks):
+            if not os.path.isdir(args.output_masks):
                 raise "--output_masks error. Please provide a directory to output the masks to."
 
         self.Pipeline.load_unet(args.trained_unet)
-
 
         predicted = self.Pipeline.unet_apply_on_images(testdata)
 
@@ -314,8 +316,10 @@ Please see the options within each of the commands.''')
             f1_scores.append(self.Pipeline._f1_score(ground_truth, mask))
 
             if args.output_masks:
-                pass
-            #output_mask = np.zeros(results[i].shape[])
+                img = np.array(Image.open(os.path.join(args.testing_directory, "image", filename)))
+                img = resize(img, mask.shape)
+                img[mask==0] = (0,0,0)
+                io.imsave(os.path.join(args.output_masks, filename), img)
 
         AP = self.Pipeline._PASCAL_VOC_AP(precisions, recalls, iou_scores, IoU=args.ap_iou_threshold)
         iou_scores = np.array(iou_scores)
